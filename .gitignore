@@ -1,0 +1,4 @@
+# Vagrant stuff
+/prereq/**/.vagrant
+
+snips.js
