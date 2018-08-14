@@ -1,6 +1,18 @@
+<<<<<<< HEAD
 # MongoDB Technical Training notes
 
 These are notes taken during technical training and experimenting with MongoDB.
+=======
+# MongoDB Sales Training notes
+
+These are notes taken while following sales bootcamp.
+
+## Theory
+
+# MongoDB Technical Training notes
+
+These are notes taken while following new hire technical training.
+>>>>>>> c2366c2... complete sections up to array operators
 
 ## Connection Details
 
@@ -59,6 +71,7 @@ Navigate to the directory on the host where the .js file is located. Start up th
 
 ### Instering multiple documents
 
+<<<<<<< HEAD
 #### Ordered (standard): stops on error, e.g. duplicate key
 
     insertMany([array of docs to insert])
@@ -66,6 +79,13 @@ Navigate to the directory on the host where the .js file is located. Start up th
 #### Unordered: continue on error
 
     insertMany([array of docs to insert], { "ordered" : false })
+=======
+Ordered (standard): stops on error, e.g. duplicate key.  
+Unordered: continue on error.
+
+    [array of docs to insert], { "ordered" : false }
+    db.moviesScratch.insertMany([array of docs to insert])
+>>>>>>> c2366c2... complete sections up to array operators
 
 ### Reading documents
 
@@ -92,8 +112,12 @@ find inside arrays: any array value on specified position
 1 to include fields (and exclude all others).  
 \_id is always returned in projections, hard exclusion (0) is necessary in that case.
 
+<<<<<<< HEAD
     find({filter},{projections})
     find({runtime: {$gte: 90, $lte: 120}}, {_id: 0, title: 1, runtime: 1})
+=======
+    {filter},{projections}
+>>>>>>> c2366c2... complete sections up to array operators
 
 ### Updating documents
 
