@@ -309,4 +309,150 @@ Sharded clusters are composed of a mongos, replica sets and a special type of re
 
 ### Configuration file
 
-This file
+YAML file containing the configuration parameters for mongod and mongos.
+
+- Provide same functionality as command line options
+- Improve readability
+- Use documentation to facilitate mapping
+
+Usage:
+
+    mongod --config "/etc/mongod.conf"
+    mongod -f "/etc/mongod.conf"
+
+Example:
+
+    storage:
+        dbPath: "/data/db"
+    systemLog:
+        path: "/data/log.mongod.log"
+        destination: "file"
+    replication:
+        replSetName: M103
+    net:
+        bindIp : "127.0.0.1, 192.168.0.10"
+    ssl:
+        mode: "requireSSL"
+        PEMKeyFile: "/etc/ssl/ssl.pem"
+        CAFile: "/etc/ssl/SSLCA.pem"
+    security:
+        keyFile: "/data/keyfile"
+    processManagement:
+        fork : true
+
+### Creating users via command line
+
+    mongo admin --host localhost:27000 --eval '
+        db.createUser({
+            user: "m103-admin",
+            pwd: "m103-pass",
+            roles: [
+            {role: "root", db: "admin"}
+            ]
+        })
+    '
+
+### Folder hierarchy
+
+- /data/db : _never_ edit these.
+  - collection.\*.wt contains collection data (binary)
+  - index.\*.wt contains index data (binary)
+  - .\*.lock blocks processes for accessing same files
+  - (dir) diagnostic.data only for diagnostic purposes used by MDB support engineers
+  - (dir) journal: writes are bufered in mem, flushed 60s, writeahead buffer entries every 50ms
+
+### Basic linux
+
+    sudo mkdir -p /var/mongodb/db
+    sudo chown vagrant:vagrant /var/mongodb/db
+
+### Basic mongo shell commands
+
+Basic helper groups
+
+- db.method: interact with the database
+  - db.collection.method: interact with a specific collection
+- rs.method: control replica set
+- sh.method: control shared cluster deployment and management
+
+User management commands:
+
+    db.createUser()
+    db.dropUser()
+
+Collection management commands:
+
+    db.collection.renameCollection()
+    db.collection.createIndex()
+    db.collection.drop()
+
+Database management commands:
+
+    db.dropDatabase()
+    db.createCollection()
+
+Database status command:
+
+    db.serverStatus()
+
+Creating index with Database Command versus Creating index with Shell Helper::
+
+    db.runCommand(
+        { "createIndexes": collection },
+        { "indexes": [
+            { "key": { "product": 1 }},
+            { "name": "name_index" }]
+        }
+    )
+    db.collection.createIndex(
+        { "product": 1 },
+        { "name": "name_index" }
+    )
+
+Introspect a Shell Helper:
+
+    db.collection.createIndex
+
+#### Logging basics
+
+Process log entails the entire mongod instance. It supports multiple components for controlling granularity of the events captured.
+
+Get the logging components and change the logging level:
+
+    db.getLogComponents()
+    db.setLogLevel(0, "index")
+
+Use tail or other tools to retrieve the log.
+
+#### Profiling the database
+
+Profiler captures
+
+- CRUD operations
+- Administrative operations
+- Configuration operations (cluster)
+
+And has the following levels
+
+- 0 (default), does not collect any data
+- 1 collects data for operations > slowms
+- 2 collects data for all operations
+
+Usage
+
+    db.getProfilingLevel()
+    db.setProfilingLevel(1)
+    db.setProfilingLevel( 1, { slowms: 0 } )
+    db.system.profile.find().pretty()
+
+In the configuration file
+
+    systemLog:
+        path: "/var/mongodb/db/mongod.log"
+        destination: "file"
+        logAppend: true
+    operationProfiling:
+        mode: slowOp
+        slowOpThresholdMs : 50
+
+#### Security
