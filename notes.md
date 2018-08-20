@@ -2,6 +2,57 @@
 
 These are notes taken during technical training and experimenting with MongoDB.
 
+<!-- TOC -->
+
+- [MongoDB Technical Training notes](#mongodb-technical-training-notes)
+  - [Connection Details](#connection-details)
+  - [Data types](#data-types)
+  - [Use cases](#use-cases)
+    - [Navigating via command line](#navigating-via-command-line)
+    - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
+    - [Inserting one single document](#inserting-one-single-document)
+    - [Instering multiple documents](#instering-multiple-documents)
+    - [Reading documents](#reading-documents)
+    - [Projection on documents](#projection-on-documents)
+    - [Updating documents](#updating-documents)
+    - [Update many documents](#update-many-documents)
+    - [Upserts](#upserts)
+    - [Replace one](#replace-one)
+    - [Delete](#delete)
+    - [Advanced query operators](#advanced-query-operators)
+      - [Comparison operators](#comparison-operators)
+      - [Element operators](#element-operators)
+      - [Logical operators](#logical-operators)
+      - [Array operators](#array-operators)
+      - [Regex](#regex)
+  - [The MongoD](#the-mongod)
+    - [Starting the server](#starting-the-server)
+    - [Shutting down the server](#shutting-down-the-server)
+    - [Architecture](#architecture)
+    - [Data structures](#data-structures)
+    - [Configuration file](#configuration-file)
+    - [Creating users via command line](#creating-users-via-command-line)
+    - [Folder hierarchy](#folder-hierarchy)
+    - [Basic linux](#basic-linux)
+    - [Basic mongo shell commands](#basic-mongo-shell-commands)
+      - [Logging basics](#logging-basics)
+      - [Profiling the database](#profiling-the-database)
+  - [Security](#security)
+    - [Introduction](#introduction)
+    - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
+    - [Terminology](#terminology)
+      - [Resources](#resources)
+      - [Privileges](#privileges)
+      - [Role inheritance](#role-inheritance)
+      - [Network Authentication Restrictions](#network-authentication-restrictions)
+    - [Built in roles](#built-in-roles)
+  - [Server Tools Overview](#server-tools-overview)
+    - [mongostat](#mongostat)
+    - [mongodump and mongorestore](#mongodump-and-mongorestore)
+    - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
+
+<!-- /TOC -->
+
 ## Connection Details
 
     #Class cluster: READ ONLY BY DESIGN
@@ -16,27 +67,26 @@ Read more: [MongoDB BSON Data Types](https://docs.mongodb.com/manual/reference/b
 
 MongoDB was built on top of the JSON spec. Additional data types were added.
 
-- JSON Types
-  - object
-  - array
-  - string
-  - number
-  - bool ("true"/"false")
-  - null ("null")
-- BSON Types
-  - int
-  - long
-  - decimal (since 3.4)
-  - double
-  - date
-  - ObjectId
-- Advanced
-  - bindata
-  - regex
-  - javascript
-  - javascriptWithScope
-  - minKey
-  - maxKey
+| Data type             | Origin     |
+| --------------------- | ---------- |
+| object                | JSON       |
+| array                 | JSON       |
+| string                | JSON       |
+| number                | JSON       |
+| bool ("true"/"false") | JSON       |
+| null ("null")         | JSON       |
+| int                   | BSON       |
+| long                  | BSON       |
+| decimal (since 3.4)   | BSON       |
+| double                | BSON       |
+| date                  | BSON       |
+| ObjectId              | BSON       |
+| bindata               | BSON (adv) |
+| regex                 | BSON (adv) |
+| javascript            | BSON (adv) |
+| javascriptWithScope   | BSON (adv) |
+| minKey                | BSON (adv) |
+| maxKey                | BSON (adv) |
 
 ## Use cases
 
@@ -46,6 +96,7 @@ MongoDB was built on top of the JSON spec. Additional data types were added.
     use database
     show collections
     db.collection.find().pretty()
+    db.stats()
 
 ### Executing javascript on the host machine
 
@@ -455,4 +506,150 @@ In the configuration file
         mode: slowOp
         slowOpThresholdMs : 50
 
-#### Security
+## Security
+
+### Introduction
+
+authentication - who are you
+
+- SCRAM - password security
+- X.509 - certificate based
+- (Enterprise) LDAP
+- (Enterprise) Kerberos
+- (Cluster) Cluster Authentication
+
+authorisation - what can you do
+
+- Role Based Access Control
+  - Each user has one or more Roles
+  - Each Role has one or more Privileges
+  - Privilege is a group of Actions and the Resources they apply to
+
+### Adding security to a new mongod
+
+Enable RBAC on the cluster and implicitly enables authentication as well. Your instance is protected yet doesn't contain any users. The **localhost exception** allows you to access a server enforcing authentication without a configured user to authenticate with.
+
+- Must run mongo shell from the same host running the mongod
+- Localhost exception closes after first user is created
+- Always create a user with admin privileges first
+
+MongoD conf:
+
+    security:
+      authorization: enabled
+
+Creating the first admin user:
+
+    use admin
+    db.createUser({
+    user: "root",
+    pwd: "root123",
+    roles : [ "root" ]
+    })
+
+Connecting as the newly created user:
+
+    mongo --username root --password root123 --authenticationDatabase admin
+
+### Terminology
+
+A _Role_ is composed of a set of _Privileges_ which are _Actions_ that can be performed over a _Resource_
+
+#### Resources
+
+    // specific database and collection
+    { db : "products", collection: "inventory"}
+
+    // all databases and all collections
+    { db : "", collection: ""}
+
+    // any database and specific collection
+    { db : "", collection: "accounts"}
+
+    // specific database and any collections
+    { db : "products", collection: ""}
+
+    // or cluster resource
+    { cluster : true}
+
+#### Privileges
+
+A privilege is an action that can be performed over a resource.
+
+    // allow to shutdown over the cluster
+    { resource : { cluster : true }, actions : [ "shutdown" ] }
+
+#### Role inheritance
+
+A role can inherit from one or more other roles.
+
+#### Network Authentication Restrictions
+
+A role can be configured to allow only access from one or more particular client sources (_clientSource_) or to one or more articular server addresses (_serverAddress_).
+
+### Built in roles
+
+All roles defined here are per database level for each user. Different roles can be applied to diferent users on different databases. Exception to this rule is that Database user, database administration, super user are _all database roles_.
+
+| Role                    | Desc                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| Database user           | read, readWrite                                                                 |
+| Database administration | dbAdmin, userAdmin, dbOwner                                                     |
+| All-Database roles      | readAnyDatabase, readWriteAnyDatabase, dbAdminAnyDatabase, userAdminAnyDatabase |
+| Cluster administration  | clusterAdmin, clusterManager, clusterMonitor, hostManager                       |
+| Backup/Restore          | backup, restore                                                                 |
+| Super user              | root                                                                            |
+
+| Role      | Operations detail                                                                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| userAdmin | changeCustomData, changePassword, createRole, createUser, dropRole, dropUser, grantRole, revokeRole, setAuthenticationRestriction, viewRole, viewUser... |
+| dbAdmin   | collStats, dbHash, dbStats, killCursors, listIndexes, listCollections, bypassDocumentValidation, collMod, collStats, compact, converToCapped...          |
+| dbOwner   | _Combines_ **readWrite**, **dbAdmin**, **userAdmin** roles to allow the user to perform _any_ administrative action on the database.                     |
+
+Create a security officer, only allowed to manage users, not data:
+
+    db.createUser({
+        user: "security_officer",
+        pwd: "h3ll0th3r3",
+        roles: [ { db: "admin", role: "userAdmin" } ]
+    })
+
+Create a database admin, only allowed to manage databases, not data:
+
+    db.createUser({
+        user: "dba",
+        pwd: "c1lynd3rs",
+        roles: [ { db: "admin", role: "dbAdmin" } ]
+    })
+
+Grant a role to a user:
+
+    db.grantRolesToUser( "dba",  [ { db: "playground", role: "dbOwner"  } ] )
+
+Show details on the roles and privileges:
+
+    db.runCommand( { rolesInfo: { role: "dbOwner", db: "playground" }, showPrivileges: true} )
+
+## Server Tools Overview
+
+### mongostat
+
+get quick stats on a running mongod process
+
+    mongostat --port 30000
+
+### mongodump and mongorestore
+
+file import and export of a mongod collection **to/from BSON** along with its metadata
+
+    mongodump --port 30000 --db applicationData --collection products
+    mongorestore --drop --port 30000 dump/
+
+### mongoexport and mongorestore
+
+import and export to JSON or CSV of mongodb collections
+
+    mongoexport --port 30000 --db applicationData --collection products -o products.json
+    mongoimport --port 30000 products.json
+
+    mongoimport --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000 -d applicationData -c products /dataset/products.json
