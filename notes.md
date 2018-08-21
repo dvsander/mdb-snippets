@@ -50,6 +50,18 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [mongostat](#mongostat)
     - [mongodump and mongorestore](#mongodump-and-mongorestore)
     - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
+  - [Replication](#replication)
+    - [Setting up a MongoDB replica set](#setting-up-a-mongodb-replica-set)
+      - [How to initiate a replica set](#how-to-initiate-a-replica-set)
+      - [How to add nodes to a replica set](#how-to-add-nodes-to-a-replica-set)
+      - [How to check the status of a replica set](#how-to-check-the-status-of-a-replica-set)
+    - [The Replication Configuration Document](#the-replication-configuration-document)
+    - [Replication commands](#replication-commands)
+    - [The oplog](#the-oplog)
+      - [Configuring the oplog](#configuring-the-oplog)
+      - [Querying the oplog](#querying-the-oplog)
+      - [One final thing about oplogs and the local database](#one-final-thing-about-oplogs-and-the-local-database)
+    - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
 
 <!-- /TOC -->
 
@@ -75,12 +87,14 @@ MongoDB was built on top of the JSON spec. Additional data types were added.
 | number                | JSON       |
 | bool ("true"/"false") | JSON       |
 | null ("null")         | JSON       |
+|                       |            |
 | int                   | BSON       |
 | long                  | BSON       |
 | decimal (since 3.4)   | BSON       |
 | double                | BSON       |
 | date                  | BSON       |
 | ObjectId              | BSON       |
+|                       |            |
 | bindata               | BSON (adv) |
 | regex                 | BSON (adv) |
 | javascript            | BSON (adv) |
@@ -115,6 +129,10 @@ Unordered: continue on error.
 
     [array of docs to insert], { "ordered" : false }
     db.moviesScratch.insertMany([array of docs to insert])
+
+The mongo command is a full-fledged javascript interpreter, so this also works:
+
+    for ( i=0; i< 100; i++) { db.messages.insert( { 'msg': 'not yet', _id: i } ) }
 
 ### Reading documents
 
@@ -653,3 +671,232 @@ import and export to JSON or CSV of mongodb collections
     mongoimport --port 30000 products.json
 
     mongoimport --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000 -d applicationData -c products /dataset/products.json
+
+## Replication
+
+The concept of maintaining multiple copies of your data.
+
+MongoDB uses the statement based replication mechanism.
+
+- binary replication: specific byte changes on disk (and their location) are recorded and shared amongst the members
+  - less data, faster
+  - OS is consistent amongst all members
+- statement based: all statements recorded in oplog, synced and replayed across members
+  - not bound by OS, machine level, work on all architectures
+  - transformed statements for idempotency e.g. $inc statements transformed to value statements
+
+Replica set can contain up to 50 members.
+Only 7 members can be voting.
+The number of nodes need to be an odd number to allow the voting mechanism to work.
+
+- **Non-voting** a node containing data yet without voting privileges
+- **Arbiter** nodes can be added yet are discouraged, no data
+- **Hidden** nodes can provide specific read-only workloads, copies of data hidden from your application. Must have priority set to 0
+- **Delayed** nodes: specific hidden nodes which enable hot backups thus adding resilience without having to rely on cold backup nodes
+
+[Read more on the RAFT protocol](http://thesecretlivesofdata.com/raft/)
+
+### Setting up a MongoDB replica set
+
+Configuration node1.conf:
+
+    storage:
+        dbPath: /var/mongodb/db/node1
+    net:
+        bindIp: 192.168.103.100,localhost
+        port: 27011
+    security:
+        authorization: enabled
+        keyFile: /var/mongodb/pki/m103-keyfile
+    systemLog:
+        destination: file
+        path: /var/mongodb/db/node1/mongod.log
+        logAppend: true
+    processManagement:
+        fork: true
+    replication:
+        replSetName: m103-example
+
+Creating the keyfile, directories and other setup code
+
+    sudo mkdir -p /var/mongodb/pki/
+    sudo chown vagrant:vagrant /var/mongodb/pki/
+    openssl rand -base64 741 > /var/mongodb/pki/m103-keyfile
+    chmod 400 /var/mongodb/pki/m103-keyfile
+
+    mkdir -p /var/mongodb/db/{node1, node2,node3}
+    cp node1.conf node2.conf
+    cp node1.conf node3.conf
+
+    #adapt dbPath, port and systemlog parameters to unique value (node nr).
+
+Run the 3 standalone mongod processes
+
+    mongod -f node1.conf
+    mongod -f node2.conf
+    mongod -f node3.conf
+
+#### How to initiate a replica set
+
+    mongo --port 27011
+    rs.initiate()
+
+    use admin
+    db.createUser({
+        user: "m103-admin",
+        pwd: "m103-pass",
+        roles: [{role: "root", db: "admin"}]
+    })
+
+    exit
+    mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+#### How to add nodes to a replica set
+
+    rs.add("192.168.103.100:27012")
+    rs.add("192.168.103.100:27013")
+
+#### How to check the status of a replica set
+
+Getting replica set status:
+
+    rs.status()
+
+Getting an overview of the replica set topology:
+
+    rs.isMaster()
+
+Stepping down the current primary, forcing an election:
+
+    rs.stepDown()
+
+Checking replica set overview after election:
+
+    rs.isMaster()
+
+### The Replication Configuration Document
+
+A JSON object that defines the configuration options of our replica set. Can be configured manually from the shell. Helper methods exist. Document is shared across the set.
+
+| Field       | Description                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| \_id        | the replica set name, see --replSetName in mongo.conf                                       |
+| version     | gets incremented each time the replica set changes (e.g. adding a member)                   |
+| settings    | advanced configuration settings for the replicaset                                          |
+| members     | array containing the node members of the replica set                                        |
+| \_id        | unique identifier for a node member within the set                                          |
+| host        | hostname and port                                                                           |
+| arbiterOnly | role of the node: no data, only arbiter                                                     |
+| hidden      | role of the node: not visible to the application, used for non-operational (BI)             |
+| priority    | number hierarchy 0-1-1000, higher priority, more chance to become primary. 0 never primary. |
+| slaveDelay  | number in seconds, default 0, used for hot backups                                          |
+
+### Replication commands
+
+rs.status(): used to report on general health on each nodes. Data is get from heartbeats that get sent across.
+
+rs.isMaster(): describes the role of the node on which this command is run
+
+db.serverStatus()['repl']: similar to rs.isMaster yet adds _rbid_ field. This is the amount of rollbacks
+
+rs.printReplicationInfo(): returns oplog data relative to current node in _timings_. For actual oplog data, contult the oplog file itself.
+
+rs.add: adds a new node to the replica set
+
+rs.initiate: initiates the replica set mechanism before everything else
+
+rs.remove: removes a node from the replica set
+
+rs.config: returns a document containing the replica set configuration
+
+### The oplog
+
+In a standalone node, two default databases are created: _admin_ and _local_. The _admin_ database hosts (and runs) the administrative functions. The _local_ database stores the startup logs.
+
+In a replica set, additional collections in the _local_ database are created.
+
+    me
+    oplog.rs <!--
+    replset.election
+    replset.minvalid
+    replset.oplogTruncateAfterPoint
+    startup_log
+    system.replset
+    system.rollback.id
+
+oplog \.rs is the central point of replication mechanism. It keeps track of all statements being replicated in the replica set. All piece of information needs to be replicated are stored inside.
+
+As operations are performed, the collection accumulates the statements. Once max is reached, the earliest is overwritten. The time between overwriting is the replication window. Important to monitor: impacts the time a node can be down without human intervention is needed. The secundary nodes apply the master oplog in their own oplog. Once a node gets down (network, system), the secundary keeps accumulating the writes.
+
+In order to catch up, the server will need to decide a common point in the past by evaluating each others oplogs. If it's not able to find one (already rotated), automatic recovery is not possible and the node will go into "maintenance" mode. The larger the oplog, the higher the replication window and better the chances of automated recovery.
+
+One update statement may generate many entries in the log. In order to make the oplog immutable, update commands can be transformed to $set statements. As such:
+
+    use m103
+    db.messages.updateMany( {}, { $set: { author: 'norberto' } } )
+    use local
+    db.oplog.rs.find( { "ns": "m103.messages" } ).sort( { $natural: -1 } )
+    {   "ts" : Timestamp(1534851637, 100),
+        "t" : NumberLong(3),
+        "h" : NumberLong("-6002197775968380802"),
+        "v" : 2,
+        "op" : "u",
+        "ns" : "m103.messages",
+        "ui" : UUID("46e5bb3b-b711-4371-ba6b-561f0ba94852"),
+        "o2" : { "_id" : 99 },
+        "wall" : ISODate("2018-08-21T11:40:37.789Z"),
+        "o" : { "$v" : 1, "$set" : { "author" : "norberto" } }
+    }
+
+#### Configuring the oplog
+
+The oplog is a capped collection, meaning it can grow to a pre-configured size before it starts to overwrite the oldest entries with newer ones. 5% of free disk is reserved for oplog max size.
+
+    var stats = db.oplog.rs.stats() # or db.oplog.rs.stats(1024*1024) (in megabytes)
+    stats.capped # Verifying that this collection is capped
+    stats.size # Getting current size of the oplog (in bytes)
+    stats.maxSize # Getting size limit of the oplog (in bytes)
+
+It can be configured in the mongod configuration. To change the oplog size of a running replica set member, use the _replSetResizeOplog_ administrative command. _replSetResizeOplog_ enables you to resize the oplog dynamically without restarting the mongod process.
+
+     replication.oplogSizeMB¶
+
+#### Querying the oplog
+
+Querying the oplog after connected to a replica set:
+
+    use local
+    db.oplog.rs.find()
+    db.oplog.rs.find( { "o.msg": { $ne: "periodic noop" } } ).sort( { $natural: -1 } ).limit(1).pretty()
+    db.oplog.rs.find({"ns": "m103.messages"}).sort({$natural: -1})
+
+Getting the current status of the replication
+
+    rs.printReplicationInfo()
+        configured oplog size:   1677.328125MB
+        log length start to end: 77888secs (21.64hrs)
+        oplog first event time:  Mon Aug 20 2018 13:08:34 GMT+0000 (UTC)
+        oplog last event time:   Tue Aug 21 2018 10:46:42 GMT+0000 (UTC)
+        now:                     Tue Aug 21 2018 10:46:51 GMT+0000 (UTC)
+
+Log length expressed as time: given the current workload, in what time will we begin overwriting the oplog.
+
+#### One final thing about oplogs and the local database
+
+> Never write to the local database.
+
+### Reconfiguring a running replica set
+
+From the Mongo shell of the replica set, adding the new secondary and the new arbiter, removing the arbiter. These operations trigger changes to the replica set automatically.
+
+    rs.add("m103.mongodb.university:27014")
+    rs.addArb("m103.mongodb.university:28000")
+    rs.remove("m103.mongodb.university:28000")
+
+In order to modify the advanced configuration aspects (voting power, hidden) you must use the following logic and trigger a manual _reconfig_.
+
+    cfg = rs.conf()
+    cfg.members[3].votes = 0
+    cfg.members[3].hidden = true
+    cfg.members[3].priority = 0
+    rs.reconfig(cfg)
