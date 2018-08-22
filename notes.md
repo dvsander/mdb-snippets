@@ -65,6 +65,17 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
     - [Failover and elections](#failover-and-elections)
   - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
+    - [Write concern](#write-concern)
+    - [Read concerns](#read-concerns)
+    - [Read preference](#read-preference)
+  - [Sharding](#sharding)
+    - [When to shard](#when-to-shard)
+    - [Sharding Architecture](#sharding-architecture)
+    - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
+      - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
+      - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
+      - [Configure the replica set nodes to become members of a shard](#configure-the-replica-set-nodes-to-become-members-of-a-shard)
+      - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
 
 <!-- /TOC -->
 
@@ -947,3 +958,254 @@ Setting the priority of a node to 0, so it cannot become primary (making the nod
     rs.reconfig(cfg)
 
 ## Write concerns, Read concerns and Read preferences
+
+### Write concern
+
+Writeconcern is an acknowledgment mechanism that developers can add to write operations. A higher levels of acknowledgement produces a stronger durability guarantee. Durability means that the write has propagated to the number of replica set member nodes specified in the write concern. The more replica set members that acknowledge the success of a write, the more likely the write is durable in the event of a failure.
+
+When a writeConcernError occurs, the document is still written to the healthy nodes. The WriteResult object simply tells us whether the writeConcern was successful or not - it will not undo successful writes from any of the nodes.
+
+The unhealthy node will have the inserted document when it is brought back online. When the unhealthy node comes back online, it rejoins the replica set and its oplog is compared with the other nodes' oplog. Any missing operations will be replayed on the newly healthy node.
+
+> The tradeoff is time. The client has to to wait for the acknowledgments.
+
+| Level       | Description                                               |
+| ----------- | --------------------------------------------------------- |
+| 0           | No acknowledgement. Fire and forget.                      |
+| 1 (default) | Acknowledgement from primary.                             |
+| >= 2        | Acknowledgement from primary and one or more secondaries. |
+| "majority"  | Acknowledgement from a majority, defined as (nodes/2)+1.  |
+
+Options:
+
+- wtimeout : < int > - the time to wait for the requested write concern before marking the operation as failed
+  - If wtimeout is not specified, the write operation will be retried for an indefinite amount of time until the writeConcern is successful. If the writeConcern is impossible, like in this example, it may never return anything to the client.
+- j : <true/false> - requires the node to commit the write operation to the journal before returning an acknowledgement
+  - Implied with "majority" concern
+  - Advantage to have an even higher guarantee changes are stored on disk. Disabling journaling or setting this to false acknowledges writes in memory
+
+### Read concerns
+
+Developers can direct their application with a readconcern to read documents with a certain durability guarantee. It serves as a companion to writeconcern.
+
+In a rare circumstance where an application inserts data with a low level of writeconcern, data can be read from the primary without it being acknowledged by the secondaries. In case of a system failure, re-election and rollback of the (previous) primary, this can lead to stale data being read. This is why read concerns exist.
+
+| Level                        | Description                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| local (default)              | The most recent data in the cluster, read from primary. No guarantees.                         |
+| available (sharded clusters) | Same as local for replica sets. Reads against secondary members.                               |
+| majority                     | Acknowledgement as written to a majority, defined as (nodes/2)+1. Not freshest or latest data. |
+| linearizable                 | Acknowledgement as written to a majority and read your own write.                              |
+
+As general guideline the following is true:
+
+| Fast | Latest | Safe | Strategy         | Consequence                                  |
+| ---- | ------ | ---- | ---------------- | -------------------------------------------- |
+| X    | X      |      | local, available | no durability guarantee                      |
+| X    |        | X    | majority         | not latest written data                      |
+|      | X      | X    | linearizable     | reads may be slower and single document only |
+
+### Read preference
+
+Allows applications to route read operations to specific members of a replica set. It's a driver side setting.
+
+By default, applications read/write to the primary of a replica set. _Eventually_ the data in the secondaries catch up with the most recent data in the primary through the replica mechanism.
+
+The following read preferences can be configured in your application (driver) settings:
+
+| Level              | Description                               | Tradeoff                    |
+| ------------------ | ----------------------------------------- | --------------------------- |
+| primary (default)  | read from primary only                    | secondaries are for HA only |
+| primaryPreferred   | if primary unavailable, read secondary    | possible to read stale data |
+| secondary          | read from secondary only                  | possible to read stale data |
+| secondaryPreferred | if secondary unavailable, read primary    | possible to read stale data |
+| nearest            | least latency to the host (geo efficient) | possible to read stale data |
+
+> The staleness entirely depends on how much delay there is between primary and secondary nodes.
+
+Setting the read preference in mongo shell:
+
+    db.getMongo().setReadPref('primaryPreferred')
+
+## Sharding
+
+Entire datasets can be stored on one server. Replication makes sure the data is highly available. When data grows you can grow _vertically_ by adding more resources. At MongoDB scaling is done _horizontally_ by adding more machines and distributing the data. We call this a _sharded replica set_ or _sharded cluster_.
+
+In between the sharded cluster and the clients, the _mongos_ acts as a router process. It uses metadata about the data on each shard and stores it on a config server. In order to make the config server HA we use a config replica set.
+
+- Shards: store distributed collections
+- Config server: stores the metadata about each shard
+- Mongos: routes the queries to the correct shards.
+
+### When to shard
+
+Is it economically viable and possible to vertically scale? Can we keep adding resources in order to scale up?
+
+Rationale:
+
+- Performance: jumping from 100$/h to 300$/h machines does not guarantee 3x the performance.
+- Operations: increasing disk size (e.g. 1TB disks to 20TB disks at 75% usage) causes 15x more data to backup, 15x time required to restore and sync. Impact on operations, network.
+- Workload: 15x data causes 15x larger indexes, needs more RAM to be efficient
+
+With large amounts of data horizontal scaling by sharding can help by
+
+- Performance: Single-thread operations such as aggregation commands, geographical distributed data use cases all benefit from being collocated and thus sharded.
+- Operations: parallelization of backup, restore, sync processes
+- Workload: Generally, when our deployment reaches 2-5TB per server, we should consider sharding
+- Business: Sharding allows us to store different pieces of data in specific countries or regions
+
+### Sharding Architecture
+
+A virtually unlimited number of shards can be created and managed by a mongos. Clients communicate with the mongos, which communicates to the shards in a cluster - this includes the primary shard.
+
+Each database in the sharded cluster set will be assigned a primary shard. The primary shard may have more data, because non-sharded collections will only exist on the primary shard. But this is not necessarily the case. We can manually change the primary shard of a database, if we need to.
+
+Mongos responsibilities:
+
+- Routing queries to one, many or all shards
+- Gathering, organizing, possibly sorting results when documents are fetched from multiple shards in a shard_merge, transparently for the user
+- Managing sharding configuration in the config server
+- Balancing workload on each shard by moving around data when needed (e.g. "Smith" family name)
+- Splitting into chunks (see later)
+
+### Setting up a sharded cluster
+
+#### Configuring the CSRS (Config Server Replica Set)
+
+Create 3 node replica set. The **sharding.clusterRole = "configsvr"** marks all nodes as config servers. csrs_1.conf file contents:
+
+    sharding:
+        clusterRole: configsvr
+    replication:
+        replSetName: m103-csrs
+    security:
+        keyFile: /var/mongodb/pki/m103-keyfile
+    net:
+        bindIp: localhost,192.168.103.100
+        port: 26001
+    systemLog:
+        destination: file
+        path: /var/mongodb/db/csrs1.log
+        logAppend: true
+    processManagement:
+        fork: true
+    storage:
+        dbPath: /var/mongodb/db/csrs1
+
+Follow the standard procedure of creating a replica set, repeated below:
+
+    mkdir /var/mongodb/db/{csrs1,csrs2,csrs3}
+    mongod -f csrs_1.conf
+    mongod -f csrs_2.conf
+    mongod -f csrs_3.conf
+
+    mongo --port 26001
+    rs.initiate()
+
+    use admin
+    db.createUser({
+        user: "m103-admin",
+        pwd: "m103-pass",
+        roles: [{role: "root", db: "admin"}]
+    })
+
+    db.auth("m103-admin", "m103-pass")
+    rs.add("192.168.103.100:26002")
+    rs.add("192.168.103.100:26003")
+
+#### Pointing mongos to the CSRS
+
+There is no _storage.dbPath_ value in the configuration file. Mongos has no database file itself and uses the CSRS to connect and store all information, including any users created on the config server.
+
+mongos.conf:
+
+    sharding:
+        configDB: m103-csrs/192.168.103.100:26001,192.168.103.100:26002,192.168.103.100:26003
+    security:
+        keyFile: /var/mongodb/pki/m103-keyfile
+    net:
+        bindIp: localhost,192.168.103.100
+        port: 26000
+    systemLog:
+        destination: file
+        path: /var/mongodb/db/mongos.log
+        logAppend: true
+    processManagement:
+        fork: true
+
+Start the _mongos_ process. You can connect to the mongos process using the same mongo shell.
+
+    mongos -f mongos.conf
+    mongo --host "192.168.103.100:26000" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+    sh.status()
+
+    --- Sharding Status ---
+    sharding version: {
+        "_id" : 1,
+        "minCompatibleVersion" : 5,
+        "currentVersion" : 6,
+        "clusterId" : ObjectId("5b7d6f34cefbf7876b7cf7b0")
+    }
+    shards:
+    active mongoses:
+            "3.6.6" : 1
+    autosplit:
+            Currently enabled: yes
+    balancer:
+            Currently enabled:  yes
+            Currently running:  no
+            Failed balancer rounds in last 5 attempts:  0
+            Migration Results for the last 24 hours:
+                    No recent migrations
+    databases:
+            {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+
+The mongos is active, yet has no knowledge of any shards.
+
+#### Configure the replica set nodes to become members of a shard
+
+Tweak the node configuration files to mark them as shard members by including _sharding.clusterRole = 'shardsvr'_ in the configuration file.
+
+    sharding:
+        clusterRole: shardsvr
+    storage:
+        dbPath: /var/mongodb/db/node1
+    wiredTiger:
+        engineConfig:
+            cacheSizeGB: .1
+    net:
+        bindIp: 192.168.103.100,localhost
+        port: 27011
+    security:
+        keyFile: /var/mongodb/pki/m103-keyfile
+    systemLog:
+        destination: file
+        path: /var/mongodb/db/node1/mongod.log
+        logAppend: true
+    processManagement:
+        fork: true
+    replication:
+        replSetName: m103-repl
+
+#### A rolling upgrade of the existing cluster
+
+Restart both secondaries first with the new configuration.
+
+    mongo --port 27012 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+    use admin
+    db.shutdownServer()
+    mongod -f node2.conf
+
+Connect to the primary and step it down
+
+    mongo --port 27011 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+    rs.stepDown()
+    use admin
+    db.shutdownServer()
+    mongod -f node1.conf
+
+Sharding is now enabled on this replica set. Connect to mongos and add the replica set:
+
+    mongo --host "192.168.103.100:26000" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+    sh.addShard("m103-repl/192.168.103.100:27012")
+    sh.status()
