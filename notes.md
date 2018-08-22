@@ -11,7 +11,7 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Navigating via command line](#navigating-via-command-line)
     - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
     - [Inserting one single document](#inserting-one-single-document)
-    - [Instering multiple documents](#instering-multiple-documents)
+    - [Inserting multiple documents](#inserting-multiple-documents)
     - [Reading documents](#reading-documents)
     - [Projection on documents](#projection-on-documents)
     - [Updating documents](#updating-documents)
@@ -60,8 +60,11 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [The oplog](#the-oplog)
       - [Configuring the oplog](#configuring-the-oplog)
       - [Querying the oplog](#querying-the-oplog)
-      - [One final thing about oplogs and the local database](#one-final-thing-about-oplogs-and-the-local-database)
+      - [One final thing about oplog and the local database](#one-final-thing-about-oplog-and-the-local-database)
     - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
+    - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
+    - [Failover and elections](#failover-and-elections)
+  - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
 
 <!-- /TOC -->
 
@@ -122,7 +125,7 @@ Navigate to the directory on the host where the .js file is located. Start up th
 
     db.moviesScratch.insertOne({title:"Star Trek II: The Wrath of Khan", year: 1982, imdb: "tt0084726"})
 
-### Instering multiple documents
+### Inserting multiple documents
 
 Ordered (standard): stops on error, e.g. duplicate key.  
 Unordered: continue on error.
@@ -257,7 +260,7 @@ $ exists false: matches documents not containing the key.
     find({mpaaRating: {$exists: true}})
     find({mpaaRating: {$exists: false}})
 
-Default behaviour of querying _null_ is to exclude documents with key not set.
+Default behavior of querying _null_ is to exclude documents with key not set.
 
     find({mpaaRating: null})
     find({$and: [{"metacritic": {$ne: null}}, {"metacritic": {$exists: true}}]})
@@ -354,15 +357,15 @@ remote
 
 ### Architecture
 
-- Query Language: interaction with the database and applicationss through client side libraries MongoDB Drivers
-- Document Data Model: management of namespecases, indexes, data structures, replication mechanism (writeconcern, readconcern)
+- Query Language: interaction with the database and applications through client side libraries MongoDB Drivers
+- Document Data Model: management of namespaces, indexes, data structures, replication mechanism (writeconcern, readconcern)
 - Storage layer: persistency later calls, system calls, disk flush, file structures, encryption/compression
-- Security: user management, network, authorisation
+- Security: user management, network, authorization
 - Admin: creating databases, logging infrastructure, management
 
 Multiple MongoD can form a replica set. 1 node managing read/write (primary) and several others storing copies of the data. A failover protocol ensures in case of failover the system can elect a new master without downtime or loss of data. Replica sets can be deployed anywhere on different infrastructure.
 
-MongoDB is a scalable database. Different mongods can scale horizontally through sharding. A mongoS is a shard routing component handling all operations to the shard cluster transparantly.
+MongoDB is a scalable database. Different mongod processes can scale horizontally through sharding. A mongoS is a shard routing component handling all operations to the shard cluster transparently.
 
 Sharded clusters are composed of a mongos, replica sets and a special type of replica set, the config servers which manage all the metadata, how many mongos, how many replica sets etc.
 
@@ -428,7 +431,7 @@ Example:
   - index.\*.wt contains index data (binary)
   - .\*.lock blocks processes for accessing same files
   - (dir) diagnostic.data only for diagnostic purposes used by MDB support engineers
-  - (dir) journal: writes are bufered in mem, flushed 60s, writeahead buffer entries every 50ms
+  - (dir) journal: writes are buffered in mem, flushed 60s, writes ahead buffer entries every 50ms
 
 ### Basic linux
 
@@ -536,7 +539,7 @@ authentication - who are you
 - (Enterprise) Kerberos
 - (Cluster) Cluster Authentication
 
-authorisation - what can you do
+authorization - what can you do
 
 - Role Based Access Control
   - Each user has one or more Roles
@@ -607,7 +610,7 @@ A role can be configured to allow only access from one or more particular client
 
 ### Built in roles
 
-All roles defined here are per database level for each user. Different roles can be applied to diferent users on different databases. Exception to this rule is that Database user, database administration, super user are _all database roles_.
+All roles defined here are per database level for each user. Different roles can be applied to different users on different databases. Exception to this rule is that Database user, database administration, super user are _all database roles_.
 
 | Role                    | Desc                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------- |
@@ -621,7 +624,7 @@ All roles defined here are per database level for each user. Different roles can
 | Role      | Operations detail                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | userAdmin | changeCustomData, changePassword, createRole, createUser, dropRole, dropUser, grantRole, revokeRole, setAuthenticationRestriction, viewRole, viewUser... |
-| dbAdmin   | collStats, dbHash, dbStats, killCursors, listIndexes, listCollections, bypassDocumentValidation, collMod, collStats, compact, converToCapped...          |
+| dbAdmin   | collStats, dbHash, dbStats, killCursors, listIndexes, listCollections, bypassDocumentValidation, collMod, collStats, compact, convertToCapped...         |
 | dbOwner   | _Combines_ **readWrite**, **dbAdmin**, **userAdmin** roles to allow the user to perform _any_ administrative action on the database.                     |
 
 Create a security officer, only allowed to manage users, not data:
@@ -636,7 +639,7 @@ Create a database admin, only allowed to manage databases, not data:
 
     db.createUser({
         user: "dba",
-        pwd: "c1lynd3rs",
+        pwd: "secret",
         roles: [ { db: "admin", role: "dbAdmin" } ]
     })
 
@@ -683,7 +686,7 @@ MongoDB uses the statement based replication mechanism.
   - OS is consistent amongst all members
 - statement based: all statements recorded in oplog, synced and replayed across members
   - not bound by OS, machine level, work on all architectures
-  - transformed statements for idempotency e.g. $inc statements transformed to value statements
+  - transforms statements to idempotent ones e.g. $inc statements transformed to value statements
 
 Replica set can contain up to 50 members.
 Only 7 members can be voting.
@@ -782,7 +785,7 @@ A JSON object that defines the configuration options of our replica set. Can be 
 | ----------- | ------------------------------------------------------------------------------------------- |
 | \_id        | the replica set name, see --replSetName in mongo.conf                                       |
 | version     | gets incremented each time the replica set changes (e.g. adding a member)                   |
-| settings    | advanced configuration settings for the replicaset                                          |
+| settings    | advanced configuration settings for the replica set                                         |
 | members     | array containing the node members of the replica set                                        |
 | \_id        | unique identifier for a node member within the set                                          |
 | host        | hostname and port                                                                           |
@@ -797,9 +800,9 @@ rs.status(): used to report on general health on each nodes. Data is get from he
 
 rs.isMaster(): describes the role of the node on which this command is run
 
-db.serverStatus()['repl']: similar to rs.isMaster yet adds _rbid_ field. This is the amount of rollbacks
+db.serverStatus()['repl']: similar to rs.isMaster yet adds the _rbid_ field. You can use this filed to evaluate the amount of rollbacks it lags or is before another node.
 
-rs.printReplicationInfo(): returns oplog data relative to current node in _timings_. For actual oplog data, contult the oplog file itself.
+rs.printReplicationInfo(): returns oplog data relative to current node in _timings_. For actual oplog data, consult the oplog file itself.
 
 rs.add: adds a new node to the replica set
 
@@ -826,9 +829,9 @@ In a replica set, additional collections in the _local_ database are created.
 
 oplog \.rs is the central point of replication mechanism. It keeps track of all statements being replicated in the replica set. All piece of information needs to be replicated are stored inside.
 
-As operations are performed, the collection accumulates the statements. Once max is reached, the earliest is overwritten. The time between overwriting is the replication window. Important to monitor: impacts the time a node can be down without human intervention is needed. The secundary nodes apply the master oplog in their own oplog. Once a node gets down (network, system), the secundary keeps accumulating the writes.
+As operations are performed, the collection accumulates the statements. Once max is reached, the earliest is overwritten. The time between overwriting is the replication window. Important to monitor: impacts the time a node can be down without human intervention is needed. The secondary nodes apply the master oplog in their own oplog. Once a node gets down (network, system), the secondary keeps accumulating the writes.
 
-In order to catch up, the server will need to decide a common point in the past by evaluating each others oplogs. If it's not able to find one (already rotated), automatic recovery is not possible and the node will go into "maintenance" mode. The larger the oplog, the higher the replication window and better the chances of automated recovery.
+In order to catch up, the server will need to decide a common point in the past by evaluating each others oplog. If it's not able to find one (already rotated), automatic recovery is not possible and the node will go into "maintenance" mode. The larger the oplog, the higher the replication window and better the chances of automated recovery.
 
 One update statement may generate many entries in the log. In order to make the oplog immutable, update commands can be transformed to $set statements. As such:
 
@@ -881,7 +884,7 @@ Getting the current status of the replication
 
 Log length expressed as time: given the current workload, in what time will we begin overwriting the oplog.
 
-#### One final thing about oplogs and the local database
+#### One final thing about oplog and the local database
 
 > Never write to the local database.
 
@@ -900,3 +903,47 @@ In order to modify the advanced configuration aspects (voting power, hidden) you
     cfg.members[3].hidden = true
     cfg.members[3].priority = 0
     rs.reconfig(cfg)
+
+### Reading and writing to a replica set
+
+By default, you can only read and write from the master of a replica set. This is enforced in order to guarantee always seeing the most recent and consistent information.
+
+Trying to read from a secondary results in
+
+    "errmsg" : "not master and slaveOk=false",
+
+To force reads from a secondary, apply this command on the secondary.
+
+> Attention: this enables stale reads and non-consistent data
+
+    rs.slaveOk()
+
+Writing to a secondary _always_ results in an error message.
+
+    "errmsg" : "not master",
+
+When there is no longer a majority (e.g. only 1 node available), this node automatically steps down as a secondary. This is a fail safe mechanism, writes are no longer possible. The other nodes in the replica set need to be revived asap to enable strong consistency.
+
+### Failover and elections
+
+Primary node is the first point of contact for communicating with the database. In case of maintenance or outage, a new primary needs to be selected. This is done via the _election process_.
+
+> Priority and recency of a node's oplog dictates which nodes are more likely to become primary.
+
+_Elections_ take place when the topology changes. A node with the most recent copy of the information votes for itself. Other nodes support that vote and that node becomes the new primary.
+
+> This is the main reason for having an odd number of nodes in a replica set: in case of an even number, the voting can result in a _tie_. That's not the end of the world, a new voting takes place, but can cause x amount of waiting time for the clients. If a majority of nodes are unavailable, elections cannot take place.
+
+Forcing an election in this replica set, safely:
+
+    rs.stepDown()
+
+_Priority_ can be manually set to each node to influence the likelihood of the elections and favour nodes in becoming primary. You can also set the priority to 0 to disable the node from ever becoming a primary. The node still has voting power. Nodes with priority 0 are marked _passives_ in MongoDB.
+
+Setting the priority of a node to 0, so it cannot become primary (making the node "passive"):
+
+    cfg = rs.conf()
+    cfg.members[2].priority = 0
+    rs.reconfig(cfg)
+
+## Write concerns, Read concerns and Read preferences

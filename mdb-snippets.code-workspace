@@ -4,5 +4,31 @@
 		"path": "."
 	}
 ],
-  "settings": {}
+	"settings": {
+		"cSpell.words": [
+			"bindata",
+			"detaildoc",
+			"errmsg",
+			"jxeqq",
+			"metacritic",
+			"minvalid",
+			"mongod",
+			"mongodump",
+			"mongoexport",
+			"mongoimport",
+			"mongorestore",
+			"mongos",
+			"mongostat",
+			"mpaa",
+			"nhtt",
+			"oplog",
+			"rbid",
+			"readconcern",
+			"replset",
+			"slowms",
+			"systemlog",
+			"watlev",
+			"writeconcern"
+		]
+	}
 }
