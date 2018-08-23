@@ -9,6 +9,7 @@ These are notes taken during technical training and experimenting with MongoDB.
   - [Data types](#data-types)
   - [Use cases](#use-cases)
     - [Navigating via command line](#navigating-via-command-line)
+    - [Finding the distinct values for a particular field in a collection](#finding-the-distinct-values-for-a-particular-field-in-a-collection)
     - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
     - [Inserting one single document](#inserting-one-single-document)
     - [Inserting multiple documents](#inserting-multiple-documents)
@@ -74,8 +75,16 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
       - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
       - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
-      - [Configure the replica set nodes to become members of a shard](#configure-the-replica-set-nodes-to-become-members-of-a-shard)
+      - [Enable replica set to be a shard](#enable-replica-set-to-be-a-shard)
       - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
+    - [Config database](#config-database)
+    - [Shard keys](#shard-keys)
+      - [How to shard](#how-to-shard)
+      - [Picking a good shard key](#picking-a-good-shard-key)
+      - [Hashed shard keys](#hashed-shard-keys)
+    - [Chunks](#chunks)
+      - [Working with chunks](#working-with-chunks)
+    - [Balancing](#balancing)
 
 <!-- /TOC -->
 
@@ -122,9 +131,16 @@ MongoDB was built on top of the JSON spec. Additional data types were added.
 
     show databases
     use database
+    db.getSiblingDB("m103") - alternative to use <database> in order to not set the global db variable in the shell
     show collections
     db.collection.find().pretty()
     db.stats()
+
+### Finding the distinct values for a particular field in a collection
+
+Returns an array, e.g. [ "Bundle", "Movie", "Music", "Software" ]
+
+    db.products.distinct("type")
 
 ### Executing javascript on the host machine
 
@@ -1162,34 +1178,24 @@ Start the _mongos_ process. You can connect to the mongos process using the same
 
 The mongos is active, yet has no knowledge of any shards.
 
-#### Configure the replica set nodes to become members of a shard
+#### Enable replica set to be a shard
 
-Tweak the node configuration files to mark them as shard members by including _sharding.clusterRole = 'shardsvr'_ in the configuration file.
+Reconfigure the nodes in your replica set with the following lines added to each of their config files:
 
     sharding:
-        clusterRole: shardsvr
+    clusterRole: shardsvr
     storage:
-        dbPath: /var/mongodb/db/node1
     wiredTiger:
         engineConfig:
             cacheSizeGB: .1
-    net:
-        bindIp: 192.168.103.100,localhost
-        port: 27011
-    security:
-        keyFile: /var/mongodb/pki/m103-keyfile
-    systemLog:
-        destination: file
-        path: /var/mongodb/db/node1/mongod.log
-        logAppend: true
-    processManagement:
-        fork: true
-    replication:
-        replSetName: m103-repl
+
+The clusterRole: shardsvr section tells mongod that the node can be used in a sharded cluster.
+
+The cacheSizeGB: .1 section restricts the memory usage of each running mongod. Note that this is not good practice. However, in order to run a sharded cluster inside a virtual machine with only 2GB of memory, certain adjustments must be made.
 
 #### A rolling upgrade of the existing cluster
 
-Restart both secondaries first with the new configuration.
+Restart both secondaries one at a time with the new configuration, watch how the cluster elects new primaries.
 
     mongo --port 27012 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
     use admin
@@ -1204,8 +1210,163 @@ Connect to the primary and step it down
     db.shutdownServer()
     mongod -f node1.conf
 
-Sharding is now enabled on this replica set. Connect to mongos and add the replica set:
+Sharding is now enabled on this replica set. Connect to mongos and add the replica set.
 
     mongo --host "192.168.103.100:26000" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
     sh.addShard("m103-repl/192.168.103.100:27012")
     sh.status()
+
+### Config database
+
+> The config database is used and maintained internally by MongoDB, and you shouldn't write to it unless directed to by MongoDB Documentation or Support Engineers.
+
+It has useful information in its collections to _read_.
+
+Aggregate view on the config db is returned from the sh.status() command
+
+    sh.status()
+
+config.databases: return each database as one document, the primary shard and the partition key.
+
+    db.databases.find().pretty()
+
+config.collections: only collections which are sharded. Shows the key and whether that key is unique.
+
+    db.collections.find().pretty()
+
+config.shards: the shards in the cluster with the replica set names and hosts
+
+    db.shards.find().pretty()
+
+config.chunks: each chunk for each collection as one document, the range (inclMin and exclMax) on which data is chunked into the shards.
+
+    db.chunks.find().pretty()
+
+config.mongos: all mongos processes connected to this sharded replica set
+
+    db.mongos.find().pretty()
+
+### Shard keys
+
+Shard keys are the indexed field(s) that MongoDB uses to partition data in a sharded collection and distribute it amongst the shards in your clusters. The logical groupings that are distributed are referred to as _chunks_.
+
+Every time you write a new doc to a collection the mongos checks which shard contains the appropriate chunk for that particular key value and routes the document to that shard only. Depending on what shard is holding a given chunk , a new doc is routed to that shard and only that shard.
+
+Shard keys also support distributed read operations. If the shard key is part of your query, mongos can direct your query to only the chunks, and therefore shards, that contain the related data. Ideally your shard keys should support the majority of queries you run on the collection. That way the majority of read operations can be targeted to a single shard. Without the shard key in the query, mongo will have to check each shard in the cluster to match the query. This is referred to as targeted vs broadcast read operations.
+
+> The shard key must be present in every document in the collection and every document inserted.
+
+Shard keys are
+
+- **Indexed**: must be indexed first, before you can select the indexed fields for your shard key
+- **Permanent** you cannot unshard a collection
+- **Immutable**: shard keys are immutable. You cannot update the shard key of a collection nor update the values of the shard key for any document in the sharded collection
+
+#### How to shard
+
+Enable sharding for a particular database. Does not automatically shard but marks the collections inside as sharding eligible:
+
+    sh.enableSharding("m103")
+
+Decide on which key to use for sharding and create an index:
+
+    db.products.createIndex( { "sku" : 1 } )
+
+Enable sharding for the collection:
+
+    sh.shardCollection("m103.products", {"sku" : 1 } )
+
+#### Picking a good shard key
+
+Collections can be sharded, not databases. The goal is to provide _good write distribution_ and _read isolation_:
+
+- **High Cardinality**: High cardinality provides more shard key values, which determines the maximum number of chunks the balancer can create. e.g. gender: 3 possible shards (M/F/U), day of the week: 7 possible shards, state: 50 possible shards.
+- **Low Frequency**: low repetition of a given unique shard value. High frequency means that most documents fall within a particular range. If the majority of documents contain only a subset of the possible shard key values, then the chunks storing those documents become a bottleneck within the cluster. e.g. states: 50 possibilities is a good choice in a nation-wide application with evenly distributed amount of users and interactions, not if used in 1 or a couple of states.
+- **Non-monotonically change**: If the shard key value monotonically increased, all new inserts would be routed to the chunk with maxKey as the upper bound. e.g. timestamp or \_id.
+
+> Sharding is final. Test your shard keys in staging environment first.
+
+#### Hashed shard keys
+
+A shard key where the underlying index is hashed, a special type of shard key.
+
+> Hashed shard keys circumvent the _hotzoning_ problem when using monotonically changing shard keys as hashed values provide an even distribution of data.
+
+Consequences:
+
+- Queries on ranges of shard key values are more likely to be scatter-gather
+- Cannot support geographically isolated read operations using zoned sharding
+- Hashed Index must be on a single non-array-field
+- Sorts are slower on a hashed index than a normal index
+
+Usage:
+
+    sh.enableSharding("<database>")
+    db.collection.createIndex({"<field>" : "hashed"})
+    sh.shardCollection({"<database>.<collection>", { <shard_key_field> : "hashed" }})
+
+### Chunks
+
+Config servers hold the cluster metadata: how many shards, what databases are sharded, configuration settings... and _the mapping of chunks to shards_.
+
+When sharding is activated on a collection, one initial chunk is defined: minKeyIncl to maxKeyExcl. The different values will determine the key space of the sharding collection. As time progresses, the initial chunk is split in different chunks to be distributed evenly.
+
+Chunks
+
+- are logical groups of documents
+- are defined by a minKey (inclusive) and maxKey (exclusive)
+- can only live in one designated shard at a time
+- are determined at runtime by mongos by
+  - the chunk size: default 64MB, can be between 1MB-1024MB. Once a chunk reaches this size, it will be split.
+  - the detection of jumbo chunks: a shift in key values frequency can cause relatively more data to enter with the same shard key. This generates an abnormal situation called jumbo chunks. Jumbo chunks
+    - are larger than the maximum chunk size
+    - cannot be migrated to another shard. Once marked as jumbo, the balancer skips these
+    - will not be able to split in some cases when larger than max chunk size
+    - can be avoided by raising the max chunk size
+
+Change the chunk size:
+
+    use config
+    db.settings.save({_id: "chunksize", value: 2})
+
+> Changing the chunkSize does not trigger mongos to start distributing the data. This will be activated once new data is inserted.
+
+#### Working with chunks
+
+Showing details of all chunks:
+
+    use config
+    db.chunks.find().pretty()
+
+The sharding status indicates the balancing of chunks.
+
+    sh.status()
+
+    --- Sharding Status ---
+    ...
+    databases:
+            {  "_id" : "m103",  "primary" : "m103-repl",  "partitioned" : true }
+                    m103.products
+                            shard key: { "name" : 1 }
+                            unique: false
+                            balancing: true
+                            chunks:
+                                    m103-repl   2
+                                    m103-repl-2 1
+                            { "name" : { "$minKey" : 1 } } -->> { "name" : "In Meiner Mitte - CD" } on : m103-repl-2 Timestamp(2, 0)
+                            { "name" : "In Meiner Mitte - CD" } -->> { "name" : "Tha Shiznit: Episode 1 - CD" } on : m103-repl Timestamp(2, 1)
+                            { "name" : "Tha Shiznit: Episode 1 - CD" } -->> { "name" : { "$maxKey" : 1 } } on : m103-repl Timestamp(1, 2)
+
+Finding the chunk document based on the shard key, in this case '21572585':
+
+    db.getSiblingDB("config").chunks.find({
+        "ns" : "m103.products",
+        $expr: {
+            $and : [
+            {$gte : [ 21572585, "$min.sku"]},
+            {$lt : [21572585, "$max.sku"]}
+            ]
+        }
+    })
+
+### Balancing
