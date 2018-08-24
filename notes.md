@@ -39,7 +39,7 @@ These are notes taken during technical training and experimenting with MongoDB.
       - [Logging basics](#logging-basics)
       - [Profiling the database](#profiling-the-database)
   - [Security](#security)
-    - [Introduction](#introduction)
+    - [Introduction to security](#introduction-to-security)
     - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
     - [Terminology](#terminology)
       - [Resources](#resources)
@@ -90,6 +90,13 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
       - [explain(): a powerful tool](#explain-a-powerful-tool)
   - [MongoDB Performance](#mongodb-performance)
+    - [How data is stored on disk](#how-data-is-stored-on-disk)
+      - [Physical files](#physical-files)
+      - [Journaling](#journaling)
+  - [Indexes](#indexes)
+    - [Preparation of database](#preparation-of-database)
+    - [What are indexes](#what-are-indexes)
+    - [Single field indexes](#single-field-indexes)
 
 <!-- /TOC -->
 
@@ -561,7 +568,7 @@ In the configuration file
 
 ## Security
 
-### Introduction
+### Introduction to security
 
 authentication - who are you
 
@@ -1484,3 +1491,101 @@ You can find more information about explain() in the [official MongoDB documenta
     db.products.explain("executionStats").find({"shippingWeight": 1.00})
 
 ## MongoDB Performance
+
+Von Neumann Architecture considerations and advise for MongoDB
+
+- Memory: 25x times faster than SSD's, has become commodity and cheaper than ever
+  - Used for
+    - Aggregation
+    - Index Traversing
+    - Write Operations
+    - Query Engine
+    - Connections
+  - Considerations
+    - MongoDB performs critical system operations in memory
+    - In addition, a specialized all-in-memory configuration exists where all data is stored in memory
+  - Advise: MongoDB greatly benefits from more memory
+- CPU: MongoDB will by default try use all cores to respond to connections
+  - Used for
+    - Storage Engine
+    - Concurrency Model
+    - Page compression
+    - Data calculation
+    - Aggregation Framework Operations
+    - Map Reduce
+  - Considerations
+    - MongoDB has a document based concurrency model.
+    - Parallel actions on the same document can not benefit from multiple cores.
+    - In a highly concurrent system, MongoDB (especially with WiredTiger) greatly benefits from more cores
+  - Advise: MongoDB greatly benefits from more cores
+- IO:
+  - Used for
+    - replica sets, sharding
+    - client/mongo(s/d) communication
+    - durability on disk
+    - communication between CPU-Memory-Disk
+  - Considerations
+    - Disk
+      - The amount of IOPS is a big performance indicator: the more IOPS the faster, and thus more, reads and writes can be done to disk.
+      - More disks benefit the architecture because the IO load of different databases, indexes, journaling, lock files, are distributed over different disks, thus increasing overall database performance.
+      - When using multiple disks, RAID-setup is frequently configured. MongoDB compliance with RAID:
+        - Recommended:
+          - 10 great read performance, more redundancy and safety guarantees. Data is spread over RAID0 and RAID1 where inside the RAID the data is mirrored for extra read performance and durability.
+        - Discouraged:
+          - 5 and 6: do not provide sufficient performance.
+          - 0: good write performance, yet limited availability and reduced read operations.
+    - Network
+      - The way different hosts that hold different nodes in the cluster, are connected, impact the overall performance of your deployment.
+  - Advise:
+    - Choose the size and volume of your bandwidth carefully according to your topology
+    - Consider the type of connection, latency, firewalls, geography...
+    - Consider the network in conjunction with the read/write preference
+
+### How data is stored on disk
+
+A storage engine is the part of a database that is responsible for managing how data is stored, both in memory and on disk. Many databases support multiple storage engines, where different engines perform better for specific workloads. For example, one storage engine might offer better performance for read-heavy workloads, and another might support a higher throughput for write operations.
+
+#### Physical files
+
+The MongoDB preferred storage engine supports fine-grained control on how data is persisted on disk. The options --directoryperdb and --wiredTigerDirectoryForIndexes are made available to give you this choice.
+
+For each collection or index, the WiredTiger storage engine will write an individual file. The \_catalog.wt file contains a catalogue of all different collections and indexes this mongod contains.
+
+| Option                                           | Result                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| \<default>                                       | It's all stored plain and flat in one directory.                     |
+| --directoryperdb                                 | Folders for each database.                                           |
+| --directoryperdb --wiredTigerDirectoryForIndexes | Folders for each database and subfolders for collections and indexes |
+
+> The fine grained option enables the possibility to parallelize IO by mapping these folders to separate disks.
+
+Physical writes to disk occur when:
+
+1. Writeconcern with high level
+1. Periodically flushes from memory to disk as decided by the system
+
+#### Journaling
+
+The journal file acts as a safeguard against data corruption caused by incomplete writes due to e.g. unsuspected power outage. Data stored in the journal will be used to restore the system to a consistent state. The journal flushes atomically. In writeConcern you can force the writing to a journal file.
+
+## Indexes
+
+You can learn more about indexes by visiting the [Indexes Section of the MongoDB Manual](https://docs.mongodb.com/manual/indexes).
+
+### Preparation of database
+
+Import the people.json dataset into the m201.people collection:
+
+    mongoimport --username m103-admin --password m103-pass --authenticationDatabase admin --port 26000 -d m201 -c people /shared/people.json
+
+### What are indexes
+
+Indexes try to solve the problem of slow queries. Similar to the index section in many books. Indexes support the efficient execution of queries in MongoDB. Without indexes, MongoDB must perform a collection scan, i.e. scan every document in a collection, to select those documents that match the query statement. If an appropriate index exists for a query, MongoDB can use the index to limit the number of documents it must inspect.
+
+The strategy becomes to use indexes to improve performance for common queries. Build indexes on fields that appear often in queries and for all operations that return sorted results. MongoDB automatically creates a unique index on the \_id field. Although indexes can improve query performances, indexes also present some operational considerations. As you create indexes, consider the following behaviors of indexes:
+
+- Collections with high read-to-write ratio often benefit from additional indexes. Indexes do not affect un-indexed read operations.
+- For collections with high write-to-read ratio, indexes are expensive since each insert/delete/update must also update any indexes.
+- When active, each index consumes disk space and memory. This usage can be significant and should be tracked for capacity planning, especially for concerns over working set size. Each index requires at least 8 kB of data space.
+
+### Single field indexes
