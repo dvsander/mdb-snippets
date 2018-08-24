@@ -4,6 +4,8 @@
 	}],
 	"settings": {
 		"cSpell.words": [
+			"COLLSCAN",
+			"IXSCAN",
 			"Meiner",
 			"Mitte",
 			"Shiznit",
@@ -34,6 +36,7 @@
 			"shardsvr",
 			"slowms",
 			"systemlog",
+			"targetedrouted",
 			"watlev",
 			"writeconcern",
 			"wtimeout"

@@ -85,6 +85,11 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Chunks](#chunks)
       - [Working with chunks](#working-with-chunks)
     - [Balancing](#balancing)
+    - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
+      - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
+    - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
+      - [explain(): a powerful tool](#explain-a-powerful-tool)
+  - [MongoDB Performance](#mongodb-performance)
 
 <!-- /TOC -->
 
@@ -1370,3 +1375,112 @@ Finding the chunk document based on the shard key, in this case '21572585':
     })
 
 ### Balancing
+
+As data grows in a particular shard, so does the number of chunks. A well defined shard key should contribute to MongoDB evenly distributing data across the shards.
+
+The balancer process:
+
+- is responsible for evenly distributing chunks across the sharded cluster
+- runs on the Primary member of the config server replica set
+- is an automatic process and requires minimal user configuration
+- migrates chunks in parallel where one shard can only participate in 1 migration at any time
+
+Start the balancer - the interval delays the next balancing round
+
+    sh.startBalancer(timeout, interval)
+
+Stop the balancer - this will only stop after the current round ends
+
+    sh.stopBalancer(timeout, interval)
+
+Enable/disable the balancer:
+
+    sh.setBalancerState(boolean)
+
+### Queries in a sharded cluster
+
+All queries in a sharded cluster need to be run on _mongos_. Mongos decides based on the shard mapping to which node(s) to direct the query. The mongos is responsible for merging the results of a standard find operation.
+
+As a result, we can have very efficient queries on sharded clusters called _targeted queries_ when the query includes the shard key. _Scatter-Gather queries_ collect results from 2 or more shards when the query does not include the shard key or a range on the shard key, which could be less efficient.
+
+_sort()_: mongos pushes the sort to each shard and merge-sort the results
+
+_limit()_: mongos passes limit to each shard, then re-applies the limit to the merged set of results
+
+_skip()_: mongos performs the skip against the merged set of results
+
+#### Targeted/Routed versus scatter-gather queries
+
+- Targeted/routed queries are very efficient and require the shard key in the query.
+  - Can skip post merge/sort phase of mongos
+  - No network latency, waiting for multiple shards
+- Ranged queries on the shard key however may still require targeting every shard in the cluster
+
+> Pay special attention to _hashed keys_ that in range queries are extremely likely to result a scatter-gather query, and compound keys that require all fields in the compound key in order to be targeted
+
+### Detecting scatter-gather queries
+
+The global _winningPlan.stage = SINGLE_SHARD_ indicates the entire query was resolved by one shard, without needing post processing on mongos. The shard details show the SHARDING_FILTER was able to use a very efficient index IXSCAN to look up the results.
+
+    MongoDB Enterprise mongos> db.products.find({"sku" : 1000000749 }).explain()
+    {
+        "queryPlanner" : {
+            "mongosPlannerVersion" : 1,
+            "winningPlan" : {
+                "stage" : "SINGLE_SHARD",
+                "shards" : [
+                    {
+                        "shardName" : "m103-repl",
+                        ...
+                        "winningPlan" : {
+                            "stage" : "FETCH",
+                            "inputStage" : {
+                                "stage" : "SHARDING_FILTER",
+                                "inputStage" : {
+                                    "stage" : "IXSCAN",
+
+The global _winningPlan.stage = SHARD_MERGE_ indicates the query had to be processed on multiple shards and merged by mongos. Additionally, on each shard that was targeted the SHARDING_FILTER had to perform a COLLSCAN, an entire lookup of the collection data without using an index.
+
+    MongoDB Enterprise mongos> db.products.find( { "name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]" } ).explain()
+    {
+        "queryPlanner" : {
+            "mongosPlannerVersion" : 1,
+            "winningPlan" : {
+                "stage" : "SHARD_MERGE",
+                "shards" : [
+                    {
+                        "shardName" : "m103-repl",
+                        ...
+                        "winningPlan" : {
+                            "stage" : "SHARDING_FILTER",
+                            "inputStage" : {
+                                "stage" : "COLLSCAN",
+                             ...
+                    },
+                    {
+                        "shardName" : "m103-repl-2",
+                        ...
+                        "winningPlan" : {
+                            "stage" : "SHARDING_FILTER",
+                            "inputStage" : {
+                                "stage" : "COLLSCAN",
+                                ...
+
+#### explain(): a powerful tool
+
+The explain results present the query plans as a **tree of stages**. Each stage passes its results (i.e. documents or index keys) to the parent node. The leaf nodes access the collection or the indices. The internal nodes manipulate the documents or the index keys that result from the child nodes.
+
+> The root node is the final stage from which MongoDB derives the result set.
+
+Here are a few definitions regarding the output of explain():
+
+- SHARDING_FILTER: The step performed by mongos used to make sure that documents fetched from a particular shard are supposed to be from that shard. To do this, mongos compares the shard key of the document with the metadata on the config servers.
+- IXSCAN: An index scan, used to scan through index keys.
+- FETCH: A document fetch, used to retrieve an entire document because one or more of the fields is necessary.
+
+You can find more information about explain() in the [official MongoDB documentation](https://docs.mongodb.com/manual/reference/explain-results/).
+
+    db.products.explain("executionStats").find({"sku": 23153496})
+    db.products.explain("executionStats").find({"shippingWeight": 1.00})
+
+## MongoDB Performance
