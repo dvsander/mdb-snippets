@@ -94,9 +94,15 @@ These are notes taken during technical training and experimenting with MongoDB.
       - [Physical files](#physical-files)
       - [Journaling](#journaling)
   - [Indexes](#indexes)
-    - [Preparation of database](#preparation-of-database)
     - [What are indexes](#what-are-indexes)
-    - [Single field indexes](#single-field-indexes)
+    - [Types of indexes](#types-of-indexes)
+      - [Single field indexes](#single-field-indexes)
+      - [Compound indexes](#compound-indexes)
+      - [Multi-key indexes](#multi-key-indexes)
+      - [Partial indexes](#partial-indexes)
+      - [Sparse indexes](#sparse-indexes)
+    - [Sorting with indexes](#sorting-with-indexes)
+  - [Collation](#collation)
 
 <!-- /TOC -->
 
@@ -1570,11 +1576,7 @@ The journal file acts as a safeguard against data corruption caused by incomplet
 
 ## Indexes
 
-You can learn more about indexes by visiting the [Indexes Section of the MongoDB Manual](https://docs.mongodb.com/manual/indexes).
-
-### Preparation of database
-
-Import the people.json dataset into the m201.people collection:
+You can learn more about indexes by visiting the [Indexes Section of the MongoDB Manual](https://docs.mongodb.com/manual/indexes). Import the people.json dataset into the m201.people collection:
 
     mongoimport --username m103-admin --password m103-pass --authenticationDatabase admin --port 26000 -d m201 -c people /shared/people.json
 
@@ -1588,4 +1590,214 @@ The strategy becomes to use indexes to improve performance for common queries. B
 - For collections with high write-to-read ratio, indexes are expensive since each insert/delete/update must also update any indexes.
 - When active, each index consumes disk space and memory. This usage can be significant and should be tracked for capacity planning, especially for concerns over working set size. Each index requires at least 8 kB of data space.
 
-### Single field indexes
+### Types of indexes
+
+#### Single field indexes
+
+    db.people.createIndex( { <field> : <direction> } )
+
+Key features
+
+- Keys from only one field
+- Can find a single value for the indexed field
+  - in multi-field queries the indexed field is prioritized to filter first, then match other predicates
+- Can find a range of values
+  - $gte $gt $... operators
+  - list of values
+- Can use dot notation to index fields in subdocuments
+- Can be used to find several distinct values in a single query
+
+Showing the explain plan on a default, non-indexed query, leaving the full output in this document. You can clearly see a COLLSCAN has taken place, a one-by-one document evaluation which is of linear performance (more docs = more processing).
+
+> The ratio of nReturned:totalDocsExamined, 1:50474, is a strong indicator of a possible slow/inefficient query
+
+    db.people.find({ "ssn" : "720-38-5636" }).explain("executionStats")
+    "executionStats" : {
+            "nReturned" : 1,
+            "executionTimeMillis" : 44,
+            "totalKeysExamined" : 0,
+            "totalDocsExamined" : 50474,
+            "executionStages" : {
+                "stage" : "SINGLE_SHARD",
+                "nReturned" : 1,
+                "executionTimeMillis" : 44,
+                "totalKeysExamined" : 0,
+                "totalDocsExamined" : 50474,
+                "totalChildMillis" : NumberLong(38),
+                "shards" : [
+                    {
+                        "shardName" : "m103-repl-2",
+                        "executionSuccess" : true,
+                        "executionStages" : {
+                            "stage" : "COLLSCAN",
+                            "filter" : {
+                                "ssn" : {
+                                    "$eq" : "720-38-5636"
+                                }
+                            },
+                            "nReturned" : 1,
+                            "executionTimeMillisEstimate" : 30,
+                            "works" : 50476,
+                            "advanced" : 1,
+                            "needTime" : 50474,
+                            "needYield" : 0,
+                            "saveState" : 394,
+                            "restoreState" : 394,
+                            "isEOF" : 1,
+                            "invalidates" : 0,
+                            "direction" : "forward",
+                            "docsExamined" : 50474
+                        }
+                    }
+                ]
+            }
+        },
+
+Creating an _ascending_ index
+
+    db.people.createIndex( { ssn : 1 } )
+    exp = db.people.explain("executionStats")
+
+Executing the same query again shows a 1:1 ratio of documents returned and documents examines, perfect! You can also see detail on the IXSCAN, the usage of an index.
+
+    exp.find( { "ssn" : "720-38-5636" } )
+    "executionStages" : {
+        "stage" : "FETCH",
+        "nReturned" : 1,
+        "docsExamined" : 1,
+        "inputStage" : {
+            "stage" : "IXSCAN",
+
+Creating an index on a field in an embedded document
+
+    db.examples.insertOne( { \_id : 0, subdoc : { indexedField: "value", otherField : "value" } } )
+    db.examples.insertOne( { \_id : 1, subdoc : { indexedField : "wrongValue", otherField : "value" } } )
+
+    db.examples.createIndex( { "subdoc.indexedField" : 1 } )
+    db.examples.explain("executionStats").find( { "subdoc.indexedField" : "value" } )
+
+#### Compound indexes
+
+A compound index is an index on 2 or more fields. The order of fields listed in a compound index has significance. For instance, if a compound index consists of _{ userid: 1, score: -1 }_, the index sorts first by _userid_ and then, within each _userid_ value, sorts by _score_.
+
+    db.collection.createIndex( { <field1>: <type>, <field2>: <type2>, ... } )
+
+Index prefixes are the beginning subsets of indexed fields. For example, consider the following compound index:
+
+    { "item": 1, "location": 1, "stock": 1 }
+
+The index has the following index prefixes:
+
+    { item: 1 }
+    { item: 1, location: 1 }
+
+For a compound index, MongoDB
+
+- can use the index to support queries on the index prefixes
+  - the item field,
+  - the item field and the location field,
+  - the item field and the location field and the stock field.
+- can use the index to support a query on item and stock fields since item field corresponds to a prefix. However, the index would not be as efficient in supporting the query as would be an index on only item and stock.
+- cannot use the index to support queries that include the following fields since without the item field, none of the listed fields correspond to a prefix index:
+  - the location field,
+  - the stock field, or
+  - the location and stock fields.
+
+If you have a collection that has both a compound index and an index on its prefix (e.g. { a: 1, b: 1 } and { a: 1 }), if neither index has a sparse or unique constraint, then you can remove the index on the prefix (e.g. { a: 1 }). MongoDB will use the compound index in all of the situations that it would have used the prefix index.
+
+#### Multi-key indexes
+
+A multi-key index is an index on an array field. For each entry in the array, a separate index key is created per entry. Watch out for the following:
+
+- A compound index can only contain **1** array field
+- Arrays with lots of elements cause the index to grow very big over time
+- No support for covered queries
+
+#### Partial indexes
+
+Partial indexes only index a portion of a collection. This can be useful when the index has grown too large. Can be useful in combination with multi-key indexes.
+
+When 90% of the time users query restaurants with ratings $gte 3.5, you could use the following spatial index:
+
+    db.restaurants.createIndex(
+     { "address.city": 1, cuisine: 1 },
+     { partialFilterExpression: { 'stars': { $gte: 3.5 } } })
+
+> In order to trigger the index, the filter predicate must match the expression
+
+#### Sparse indexes
+
+A special case of a partial index: only index documents where the index field is present. The following indexes have the same behavior:
+
+    db.restaurants.createIndex(
+        { stars: 1},
+        { sparse: true }
+    )
+
+    db.restaurants.createIndex(
+        { stars : 1},
+        { partialFilterExpression : { 'stars' : { $exists : true } } }
+    )
+
+> Partial indexes are more verbose and expressive and are therefore recommended instead of parse indexes.
+
+### Sorting with indexes
+
+Documents are stored on disk in a random order. When asked MongoDB to return sorted documents, it can use
+
+- In memory sorting: the default in memory sorting looks at all the documents, sorts them in memory.
+- Index sorting: the documents will be fetched from the server using the index.
+
+Sorting with compound keys
+
+- Sort queries by using index prefixes in sort predicates
+- Filter _and_ sort queries by splitting the index prefix between query and sort predicates
+- Sort documents with an index if the sort predicate _inverts_ the index keys or their prefixes
+
+The executionStats show the ratio nReturned:totalDocsExamined is at first glance not performing, yet the ratio totalKeysExamined indicates the cursor was used. It shows the index was not used for filtering but for sorting.
+
+    var exp = db.people.explain('executionStats')
+    exp.find({}, { _id : 0, last_name: 1, first_name: 1, ssn: 1 }).sort({ ssn: 1 })
+    "executionStats" : {
+        "nReturned" : 50474,
+        "executionTimeMillis" : 202,
+        "totalKeysExamined" : 50474,
+        "totalDocsExamined" : 50474,
+
+The index can also be used in backward mode
+
+    exp.find({}, { _id : 0, last_name: 1, first_name: 1, ssn: 1 }).sort({ ssn: -1 })
+
+And for filtering and sorting in the same query (both using the index, backward)
+
+    exp.find( { ssn : /^555/ }, { _id : 0, last_name: 1, first_name: 1, ssn: 1 } ).sort( { ssn : -1 } )
+
+With compound indexes this is very similar
+
+    // create a new compound index
+    db.coll.createIndex({ a: 1, b: -1, c: 1 })
+
+    // walk the index forward
+    db.coll.find().sort({ a: 1, b: -1, c: 1 })
+
+    // walk the index backward, by inverting the sort predicate
+    db.coll.find().sort({ a: -1, b: 1, c: -1 })
+
+    // all of these queries use the index for sorting
+    db.coll.find().sort({ a: 1 })
+    db.coll.find().sort({ a: 1, b: -1 })
+    db.coll.find().sort({ a: -1 })
+    db.coll.find().sort({ a: -1, b: 1 })
+
+## Collation
+
+Allow users to specify language specific rules for string comparison (letters, case, accent marks). The offer correctness on query and data level, have marginal performance impact and allow for case insensitive queries. A collation can be defined on the following levels:
+
+- Collection level: all queries and indexes
+- Index level
+- Query level
+  - Need to match the index by using the same collation!
+
+Setting the collation on a collection:
+
+    db.createCollection( "foreign_text", {collation: {locale: "pt"}})

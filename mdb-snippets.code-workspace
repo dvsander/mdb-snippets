@@ -7,6 +7,7 @@
 			"COLLSCAN",
 			"IXSCAN",
 			"Meiner",
+			"Millis",
 			"Mitte",
 			"Neumann",
 			"SSD's",
@@ -38,8 +39,10 @@
 			"replset",
 			"shardsvr",
 			"slowms",
+			"subdoc",
 			"systemlog",
 			"targetedrouted",
+			"userid",
 			"watlev",
 			"writeconcern",
 			"wtimeout"
