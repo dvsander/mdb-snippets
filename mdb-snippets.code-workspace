@@ -45,7 +45,8 @@
 			"userid",
 			"watlev",
 			"writeconcern",
-			"wtimeout"
+			"wtimeout",
+			"zipcode"
 		]
 	}
 }

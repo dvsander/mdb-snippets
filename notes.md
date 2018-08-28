@@ -38,6 +38,7 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Basic mongo shell commands](#basic-mongo-shell-commands)
       - [Logging basics](#logging-basics)
       - [Profiling the database](#profiling-the-database)
+    - [Collation](#collation)
   - [Security](#security)
     - [Introduction to security](#introduction-to-security)
     - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
@@ -83,12 +84,10 @@ These are notes taken during technical training and experimenting with MongoDB.
       - [Picking a good shard key](#picking-a-good-shard-key)
       - [Hashed shard keys](#hashed-shard-keys)
     - [Chunks](#chunks)
-      - [Working with chunks](#working-with-chunks)
     - [Balancing](#balancing)
     - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
-      - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
+    - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
     - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
-      - [explain(): a powerful tool](#explain-a-powerful-tool)
   - [MongoDB Performance](#mongodb-performance)
     - [How data is stored on disk](#how-data-is-stored-on-disk)
       - [Physical files](#physical-files)
@@ -102,7 +101,10 @@ These are notes taken during technical training and experimenting with MongoDB.
       - [Partial indexes](#partial-indexes)
       - [Sparse indexes](#sparse-indexes)
     - [Sorting with indexes](#sorting-with-indexes)
-  - [Collation](#collation)
+    - [Index operations](#index-operations)
+    - [Query plans](#query-plans)
+    - [Explain plans](#explain-plans)
+    - [Resource allocation for indexes](#resource-allocation-for-indexes)
 
 <!-- /TOC -->
 
@@ -571,6 +573,19 @@ In the configuration file
     operationProfiling:
         mode: slowOp
         slowOpThresholdMs : 50
+
+### Collation
+
+Allow users to specify language specific rules for string comparison (letters, case, accent marks). The offer correctness on query and data level, have marginal performance impact and allow for case insensitive queries. A collation can be defined on the following levels:
+
+- Collection level: all queries and indexes
+- Index level
+- Query level
+  - Need to match the index by using the same collation!
+
+Setting the collation on a collection:
+
+    db.createCollection( "foreign_text", {collation: {locale: "pt"}})
 
 ## Security
 
@@ -1349,8 +1364,6 @@ Change the chunk size:
 
 > Changing the chunkSize does not trigger mongos to start distributing the data. This will be activated once new data is inserted.
 
-#### Working with chunks
-
 Showing details of all chunks:
 
     use config
@@ -1391,6 +1404,10 @@ Finding the chunk document based on the shard key, in this case '21572585':
 
 As data grows in a particular shard, so does the number of chunks. A well defined shard key should contribute to MongoDB evenly distributing data across the shards.
 
+Showing detailed balancing information of a collection:
+
+    db.people.getShardDistribution()
+
 The balancer process:
 
 - is responsible for evenly distributing chunks across the sharded cluster
@@ -1422,7 +1439,7 @@ _limit()_: mongos passes limit to each shard, then re-applies the limit to the m
 
 _skip()_: mongos performs the skip against the merged set of results
 
-#### Targeted/Routed versus scatter-gather queries
+### Targeted/Routed versus scatter-gather queries
 
 - Targeted/routed queries are very efficient and require the shard key in the query.
   - Can skip post merge/sort phase of mongos
@@ -1478,23 +1495,6 @@ The global _winningPlan.stage = SHARD_MERGE_ indicates the query had to be proce
                             "inputStage" : {
                                 "stage" : "COLLSCAN",
                                 ...
-
-#### explain(): a powerful tool
-
-The explain results present the query plans as a **tree of stages**. Each stage passes its results (i.e. documents or index keys) to the parent node. The leaf nodes access the collection or the indices. The internal nodes manipulate the documents or the index keys that result from the child nodes.
-
-> The root node is the final stage from which MongoDB derives the result set.
-
-Here are a few definitions regarding the output of explain():
-
-- SHARDING_FILTER: The step performed by mongos used to make sure that documents fetched from a particular shard are supposed to be from that shard. To do this, mongos compares the shard key of the document with the metadata on the config servers.
-- IXSCAN: An index scan, used to scan through index keys.
-- FETCH: A document fetch, used to retrieve an entire document because one or more of the fields is necessary.
-
-You can find more information about explain() in the [official MongoDB documentation](https://docs.mongodb.com/manual/reference/explain-results/).
-
-    db.products.explain("executionStats").find({"sku": 23153496})
-    db.products.explain("executionStats").find({"shippingWeight": 1.00})
 
 ## MongoDB Performance
 
@@ -1789,15 +1789,76 @@ With compound indexes this is very similar
     db.coll.find().sort({ a: -1 })
     db.coll.find().sort({ a: -1, b: 1 })
 
-## Collation
+### Index operations
 
-Allow users to specify language specific rules for string comparison (letters, case, accent marks). The offer correctness on query and data level, have marginal performance impact and allow for case insensitive queries. A collation can be defined on the following levels:
+MongoDB can create indexes in the _foreground_ or in the _background_.
 
-- Collection level: all queries and indexes
-- Index level
-- Query level
-  - Need to match the index by using the same collation!
+- _Foreground_ index creation (default) is fast, but block operations to the database. It will block _all_ incoming operations to the database containing the database: the database is not available to application reads or writes.
 
-Setting the collation on a collection:
+- _Background_ index creation is slower, but don't block operations to the database. They impact the query performance of the MongoDB deployment while running.
 
-    db.createCollection( "foreign_text", {collation: {locale: "pt"}})
+> Foreground indexes should be used in maintenance windows or with applications with less read/write operations. In all other production environments and situations, using background index creation is recommended.
+
+Creating a background index:
+
+    db.restaurants.createIndex( {"cuisine": 1, "name": 1, "address.zipcode": 1}, {"background": true} )
+
+Starting the command blocks the terminal until the command has executed successfully. Index creation itself is a background process so we can still log in to the database in another shell. To view the status of the index creation, execute db.currentOp() with a filter on index creation.
+
+    db.currentOp({
+        $or: [
+        { op: "command", "query.createIndexes": { $exists: true } },
+        { op: "insert", ns: /\.system\.indexes\b/ }
+        ]
+    })
+
+    // you can kill the process with the killOp() command
+    db.killOp(12345)
+
+### Query plans
+
+MongoDB has an empirical query optimizer where query plans are ran against each other during a trial period. The MongoDB query optimizer processes queries and chooses the most efficient query plan for a query given the available indexes. The query system then uses this query plan each time the query runs.
+
+Query plans are cached so that plans do not need to be generated and compared against each other every time a query is executed.
+
+Query plans are evicted when
+
+- Restart of the server
+- Workload of the first portion of the query is 10x faster than the winning plan
+- Index is rebuilt
+- Index is created/dropped
+
+### Explain plans
+
+The best way to analyse what's happening when a query gets executed:
+
+- Is your query using the index you expect? The direction the index is used, the bounds of the values looked at and the number of keys examined?
+- Is your query using an index to provide a sort? If a sort was performed by walking the index or done in memory?
+- Is your query using an index to provide the projection?
+- How selective is your index?
+- Which part of your plan is the most expensive? All the different stages the query needs to go through with details about the time it takes, the number of documents processed and returned to the next stage in the pipeline?
+
+**Theoretical** (default): without executing the query itself, simulate the queryPlan. This is a very powerful method of ?testing different queries. This is also the default.
+
+    db.products.explain("queryPlanner").find({"sku": 23153496})
+
+**Empirical**: execute the query and return statistics
+
+    db.products.explain("executionStats").find({"sku": 23153496})
+    db.products.explain("executionStats").find({"shippingWeight": 1.00})
+
+**Verbose**: execute the query, return statistics and show alternative plans that were considered
+
+    db.products.explain("allPlansExecution").find({"sku": 23153496})
+
+Here are a few definitions regarding the output of explain():
+
+- SHARDING_FILTER: The step performed by mongos used to make sure that documents fetched from a particular shard are supposed to be from that shard. To do this, mongos compares the shard key of the document with the metadata on the config servers.
+- IXSCAN: An index scan, used to scan through index keys.
+- FETCH: A document fetch, used to retrieve an entire document because one or more of the fields is necessary.
+
+> The root node is the final stage from which MongoDB derives the result set.
+
+You can find more information about explain() in the [official MongoDB documentation](https://docs.mongodb.com/manual/reference/explain-results/).
+
+### Resource allocation for indexes
