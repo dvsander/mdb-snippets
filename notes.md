@@ -105,6 +105,14 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Query plans](#query-plans)
     - [Explain plans](#explain-plans)
     - [Resource allocation for indexes](#resource-allocation-for-indexes)
+  - [Basic benchmarking](#basic-benchmarking)
+  - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
+    - [The sizing process](#the-sizing-process)
+    - [Estimating IOPS](#estimating-iops)
+    - [Estimating data size](#estimating-data-size)
+    - [Estimating the working set](#estimating-the-working-set)
+    - [Estimating the CPU](#estimating-the-cpu)
+    - [Estimating the need for sharding](#estimating-the-need-for-sharding)
 
 <!-- /TOC -->
 
@@ -1532,7 +1540,7 @@ Von Neumann Architecture considerations and advise for MongoDB
     - communication between CPU-Memory-Disk
   - Considerations
     - Disk
-      - The amount of IOPS is a big performance indicator: the more IOPS the faster, and thus more, reads and writes can be done to disk.
+      - The amount of IOPS is a big performance indicator: the more IOPS the faster, and thus more, random reads and writes can be done to disk.
       - More disks benefit the architecture because the IO load of different databases, indexes, journaling, lock files, are distributed over different disks, thus increasing overall database performance.
       - When using multiple disks, RAID-setup is frequently configured. MongoDB compliance with RAID:
         - Recommended:
@@ -1862,3 +1870,173 @@ Here are a few definitions regarding the output of explain():
 You can find more information about explain() in the [official MongoDB documentation](https://docs.mongodb.com/manual/reference/explain-results/).
 
 ### Resource allocation for indexes
+
+Getting physical info from disk:
+
+    free -h
+
+Getting information on index size, and a particular index
+
+    db.stats()
+    db.collection.stats()
+    stats.indexDetails
+
+Indexes use two resources: _disk_ and _memory_ When restrained on disk size, the index is not created at all. You will run out of data for collection data before running out of space for indexes. You can dedicate a disk for index data (see previous chapter). Deployments should also be sized in order to have all indexes on RAM. Indexes are not required to be entirely placed in RAM, however performance will be affected by constant disk access to retrieve index information.
+
+Reporting could be an edge case as BI-queries typically are specialized queries. Indexing large queries can grow big for memory. They possibly don't need to reside on all nodes. Could be an index on one node, which could even be hidden and dedicated for BI.
+
+## Basic benchmarking
+
+Different types of benchmarking can be performed. In order of relevance and differentiating, making a like for like comparison:
+
+- Low-level benchmarking, tools such as sysbench, iibench:
+  - File IO performance
+  - Scheduler performance
+  - Memory allocation and transfer speed
+  - Thread performance
+  - Database server performance
+  - Transaction isolation
+- Database server benchmarking, tools such as YCSB, TPC:
+  - Data set load
+  - Writes per second
+  - Reads per second
+  - Balanced workloads
+  - Read / write ratio
+- Distributed systems benchmarking, tools such as Hibench, JEPSEN:
+  - Linearization
+  - Serialization
+  - Fault tolerance
+
+Benchmarking conditions and anti-patterns:
+
+| Anti-pattern                                  | Reason                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| Database swap replace                         | Comparison relational<>document: copy/paste relational schema into collections |
+| Using mongo shell for write and read requests | poc-code with loops et all are not representative of an enterprise application |
+| Using mongoimport to test write response      | what are you actually proving here                                             |
+| Local laptop to run tests                     | other variables into play (open applications, IO, network)                     |
+| Using default mongodb parameters              | use production parameters and enterprise conditions: security, HA              |
+
+## Extra: MongoDB World '17: Sizing MongoDB clusters
+
+Typical questions to solution architects throughout the project life cycle.
+
+- Do I need to shard?
+- What size of servers should I use?
+- What will my monthly Atlas/AWS/Azure/Google costs be?
+- When will I need to add a new shard or upgrade my servers?
+- How much data can my servers support?
+- Will we able to meet our query latency requirements?
+
+> The only **accurate** way to size a cluster is to **build a prototype** and run performance tests using **actual data and queries** on hardware with **specs similar to production servers**. Anything else is a guess, an estimate, providing ballpark figures needed for decision taking, order processing and schema design.
+
+The output of an estimation will consist of:
+
+- \# of shards
+- Specifications of each server
+  - CPU
+  - Storage: size and performance (IOPS)
+  - Memory
+  - Network
+
+A working set is defined as the set of indexes + frequently processed documents. Ideally all indexes for frequently used queries exist in memory and all frequently access documents are kept in memory.
+
+### The sizing process
+
+A common methodology looks like
+
+- _Assumption list_: to be maintained at all times, preferably in a sheet with configurable parameters
+- _Collection size_: how many docs, average size, how much data, how much compression
+- _Working set_: estimate size of indexes and frequently accessed documents
+- _Queries_: map frequent queries to IOPS
+- _Adjustment_: based upon working set, checkpoints
+- _Candidate server specs_: calculate # of shards, validate # of IOPS, RAM
+- _Review, iterate, repeat_
+
+### Estimating IOPS
+
+Assume working set < RAM < Data size and memory contains indexes only (retrieving documents go to disk)
+
+| Action               | IOPS                                         |
+| -------------------- | -------------------------------------------- |
+| Retrieve a document  | 1 (retrieve)                                 |
+| Inserting a document | 1 (insert) + # of indexes                    |
+| Deleting a document  | 1 (delete) + # of indexes                    |
+| Update a document    | 2 (delete+insert new version) + # of indexes |
+
+In case an index does not exist and a COLLSCAN is needed, _all_ documents need to be read from disk resulting in a very large amount of IOPS needed.
+
+Once the basic numbers are in using this simplified model against all identified queries, we need to include unknowns and revise them:
+
+- Working set: hopefully _some_ documents will be covered in the working set and cover the entire workload of the application in memory.
+- Checkpoints: wiredtiger engine writes to RAM, then journal and flushes IO to disk in checkpoints. Writing to same documents frequently can reduce the # of IOPS due to optimization of the engine writing merged changes only once to disk
+- Document size relative to block size: very large documents (5MB) on a 4KB block size, need far more blocks read from disk to read an entire document.
+- Indexed arrays: every indexed element of the array needs to be updated when inserting/deleting/updating documents so factor these in.
+
+The IOPS calculation becomes
+
+| Line item                                            |
+| ---------------------------------------------------- |
+| + # of documents returned per second                 |
+| + # of documents updated per second                  |
+| + # of indexes impacted by each update               |
+| + # of inserts updated per second                    |
+| + # of indexes impacted by each insert               |
+| + # of deletes per second \* 2 (1 delete + 1 insert) |
+| + # of indexes impacted by each delete               |
+| - Multiple updates occurring within checkpoint       |
+| - % of find query results in cache                   |
+| **Total IOPS**                                       |
+
+### Estimating data size
+
+Very hard when application doesn't exist yet. Advise is to design one document and programmatically generate a large data set (>1M), add guessed indexes and measure the collection size, index size, compression. Extrapolate to production size.
+
+- \# of documents
+  - Input from use case, client
+- Data size
+  - Data size = # of documents \* average document size
+  - Average document size is available in db.stats(), compass, ops manager, cloud manager, atlas...
+- Index size
+- WiredTiger compression
+
+### Estimating the working set
+
+A working set is defined as the set of indexes + frequently processed documents. We know the index size from the estimation of data size.
+
+Estimating the working set given the queries is _an art_ since '_what are the frequently accessed docs_ is a rhetorical question.
+
+e.g. query analysis show
+
+- dashboards look at last minute of data
+- customer support tools inspect last hour worth of data
+- reports run once a day inspect last year worth of data
+
+The active documents would become 1 hour worth of data: 5000 x 3600 x 1KB = 18M KB
+
+### Estimating the CPU
+
+In most cases, RAM requirements -> large servers -> many cores so no specific requirements about CPU.
+
+Exception to this rule of thumb is aggregations: aggregations are split up in threads which can benefit from multi-core set-up.
+
+### Estimating the need for sharding
+
+Calculation based on input gathered in previous steps on disk space and RAM.
+
+- Disk:
+  - Data size: 9TB
+  - WT compression ratio: .33
+  - Storage size: 3TB
+  - Server disk capacity: 2TB
+  - => 2 Shards required
+- RAM:
+  - Working set: 428GB
+  - Server RAM: 128GB
+  - 428/128 = 3.34
+  - => 4 shards required
+- IOPS:
+  - 50K OPS
+  - 20K IOPS AWS
+  - 50K/20K = 2.5
+  - => 3 shards required
