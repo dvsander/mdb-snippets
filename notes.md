@@ -88,10 +88,6 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
     - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
     - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
-  - [MongoDB Performance](#mongodb-performance)
-    - [How data is stored on disk](#how-data-is-stored-on-disk)
-      - [Physical files](#physical-files)
-      - [Journaling](#journaling)
   - [Indexes](#indexes)
     - [What are indexes](#what-are-indexes)
     - [Types of indexes](#types-of-indexes)
@@ -105,7 +101,16 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Query plans](#query-plans)
     - [Explain plans](#explain-plans)
     - [Resource allocation for indexes](#resource-allocation-for-indexes)
-  - [Basic benchmarking](#basic-benchmarking)
+  - [MongoDB Performance](#mongodb-performance)
+    - [How data is stored on disk](#how-data-is-stored-on-disk)
+      - [Physical files](#physical-files)
+      - [Journaling](#journaling)
+    - [Basic benchmarking](#basic-benchmarking)
+    - [Optimizing CRUD Operations](#optimizing-crud-operations)
+    - [Covered Queries](#covered-queries)
+    - [Insert performance](#insert-performance)
+    - [Different data type implications](#different-data-type-implications)
+    - [Performance considerations in distributed systems](#performance-considerations-in-distributed-systems)
   - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
     - [The sizing process](#the-sizing-process)
     - [Estimating IOPS](#estimating-iops)
@@ -1504,84 +1509,6 @@ The global _winningPlan.stage = SHARD_MERGE_ indicates the query had to be proce
                                 "stage" : "COLLSCAN",
                                 ...
 
-## MongoDB Performance
-
-Von Neumann Architecture considerations and advise for MongoDB
-
-- Memory: 25x times faster than SSD's, has become commodity and cheaper than ever
-  - Used for
-    - Aggregation
-    - Index Traversing
-    - Write Operations
-    - Query Engine
-    - Connections
-  - Considerations
-    - MongoDB performs critical system operations in memory
-    - In addition, a specialized all-in-memory configuration exists where all data is stored in memory
-  - Advise: MongoDB greatly benefits from more memory
-- CPU: MongoDB will by default try use all cores to respond to connections
-  - Used for
-    - Storage Engine
-    - Concurrency Model
-    - Page compression
-    - Data calculation
-    - Aggregation Framework Operations
-    - Map Reduce
-  - Considerations
-    - MongoDB has a document based concurrency model.
-    - Parallel actions on the same document can not benefit from multiple cores.
-    - In a highly concurrent system, MongoDB (especially with WiredTiger) greatly benefits from more cores
-  - Advise: MongoDB greatly benefits from more cores
-- IO:
-  - Used for
-    - replica sets, sharding
-    - client/mongo(s/d) communication
-    - durability on disk
-    - communication between CPU-Memory-Disk
-  - Considerations
-    - Disk
-      - The amount of IOPS is a big performance indicator: the more IOPS the faster, and thus more, random reads and writes can be done to disk.
-      - More disks benefit the architecture because the IO load of different databases, indexes, journaling, lock files, are distributed over different disks, thus increasing overall database performance.
-      - When using multiple disks, RAID-setup is frequently configured. MongoDB compliance with RAID:
-        - Recommended:
-          - 10 great read performance, more redundancy and safety guarantees. Data is spread over RAID0 and RAID1 where inside the RAID the data is mirrored for extra read performance and durability.
-        - Discouraged:
-          - 5 and 6: do not provide sufficient performance.
-          - 0: good write performance, yet limited availability and reduced read operations.
-    - Network
-      - The way different hosts that hold different nodes in the cluster, are connected, impact the overall performance of your deployment.
-  - Advise:
-    - Choose the size and volume of your bandwidth carefully according to your topology
-    - Consider the type of connection, latency, firewalls, geography...
-    - Consider the network in conjunction with the read/write preference
-
-### How data is stored on disk
-
-A storage engine is the part of a database that is responsible for managing how data is stored, both in memory and on disk. Many databases support multiple storage engines, where different engines perform better for specific workloads. For example, one storage engine might offer better performance for read-heavy workloads, and another might support a higher throughput for write operations.
-
-#### Physical files
-
-The MongoDB preferred storage engine supports fine-grained control on how data is persisted on disk. The options --directoryperdb and --wiredTigerDirectoryForIndexes are made available to give you this choice.
-
-For each collection or index, the WiredTiger storage engine will write an individual file. The \_catalog.wt file contains a catalogue of all different collections and indexes this mongod contains.
-
-| Option                                           | Result                                                               |
-| ------------------------------------------------ | -------------------------------------------------------------------- |
-| \<default>                                       | It's all stored plain and flat in one directory.                     |
-| --directoryperdb                                 | Folders for each database.                                           |
-| --directoryperdb --wiredTigerDirectoryForIndexes | Folders for each database and subfolders for collections and indexes |
-
-> The fine grained option enables the possibility to parallelize IO by mapping these folders to separate disks.
-
-Physical writes to disk occur when:
-
-1. Writeconcern with high level
-1. Periodically flushes from memory to disk as decided by the system
-
-#### Journaling
-
-The journal file acts as a safeguard against data corruption caused by incomplete writes due to e.g. unsuspected power outage. Data stored in the journal will be used to restore the system to a consistent state. The journal flushes atomically. In writeConcern you can force the writing to a journal file.
-
 ## Indexes
 
 You can learn more about indexes by visiting the [Indexes Section of the MongoDB Manual](https://docs.mongodb.com/manual/indexes). Import the people.json dataset into the m201.people collection:
@@ -1885,7 +1812,85 @@ Indexes use two resources: _disk_ and _memory_ When restrained on disk size, the
 
 Reporting could be an edge case as BI-queries typically are specialized queries. Indexing large queries can grow big for memory. They possibly don't need to reside on all nodes. Could be an index on one node, which could even be hidden and dedicated for BI.
 
-## Basic benchmarking
+## MongoDB Performance
+
+Von Neumann Architecture considerations and advise for MongoDB
+
+- Memory: 25x times faster than SSD's, has become commodity and cheaper than ever
+  - Used for
+    - Aggregation
+    - Index Traversing
+    - Write Operations
+    - Query Engine
+    - Connections
+  - Considerations
+    - MongoDB performs critical system operations in memory
+    - In addition, a specialized all-in-memory configuration exists where all data is stored in memory
+  - Advise: MongoDB greatly benefits from more memory
+- CPU: MongoDB will by default try use all cores to respond to connections
+  - Used for
+    - Storage Engine
+    - Concurrency Model
+    - Page compression
+    - Data calculation
+    - Aggregation Framework Operations
+    - Map Reduce
+  - Considerations
+    - MongoDB has a document based concurrency model.
+    - Parallel actions on the same document can not benefit from multiple cores.
+    - In a highly concurrent system, MongoDB (especially with WiredTiger) greatly benefits from more cores
+  - Advise: MongoDB greatly benefits from more cores
+- IO:
+  - Used for
+    - replica sets, sharding
+    - client/mongo(s/d) communication
+    - durability on disk
+    - communication between CPU-Memory-Disk
+  - Considerations
+    - Disk
+      - The amount of IOPS is a big performance indicator: the more IOPS the faster, and thus more, random reads and writes can be done to disk.
+      - More disks benefit the architecture because the IO load of different databases, indexes, journaling, lock files, are distributed over different disks, thus increasing overall database performance.
+      - When using multiple disks, RAID-setup is frequently configured. MongoDB compliance with RAID:
+        - Recommended:
+          - 10 great read performance, more redundancy and safety guarantees. Data is spread over RAID0 and RAID1 where inside the RAID the data is mirrored for extra read performance and durability.
+        - Discouraged:
+          - 5 and 6: do not provide sufficient performance.
+          - 0: good write performance, yet limited availability and reduced read operations.
+    - Network
+      - The way different hosts that hold different nodes in the cluster, are connected, impact the overall performance of your deployment.
+  - Advise:
+    - Choose the size and volume of your bandwidth carefully according to your topology
+    - Consider the type of connection, latency, firewalls, geography...
+    - Consider the network in conjunction with the read/write preference
+
+### How data is stored on disk
+
+A storage engine is the part of a database that is responsible for managing how data is stored, both in memory and on disk. Many databases support multiple storage engines, where different engines perform better for specific workloads. For example, one storage engine might offer better performance for read-heavy workloads, and another might support a higher throughput for write operations.
+
+#### Physical files
+
+The MongoDB preferred storage engine supports fine-grained control on how data is persisted on disk. The options --directoryperdb and --wiredTigerDirectoryForIndexes are made available to give you this choice.
+
+For each collection or index, the WiredTiger storage engine will write an individual file. The \_catalog.wt file contains a catalogue of all different collections and indexes this mongod contains.
+
+| Option                                           | Result                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| \<default>                                       | It's all stored plain and flat in one directory.                     |
+| --directoryperdb                                 | Folders for each database.                                           |
+| --directoryperdb --wiredTigerDirectoryForIndexes | Folders for each database and subfolders for collections and indexes |
+
+> The fine grained option enables the possibility to parallelize IO by mapping these folders to separate disks.
+
+Physical writes to disk occur when:
+
+1. Writeconcern with high level
+1. Periodically flushes from memory to disk as decided by the system
+
+#### Journaling
+
+The journal file acts as a safeguard against data corruption caused by incomplete writes due to e.g. unsuspected power outage. Data stored in the journal will be used to restore the system to a consistent state. The journal flushes atomically. In writeConcern you can force the writing to a journal file.
+
+### Basic benchmarking
 
 Different types of benchmarking can be performed. In order of relevance and differentiating, making a like for like comparison:
 
@@ -1916,6 +1921,145 @@ Benchmarking conditions and anti-patterns:
 | Using mongoimport to test write response      | what are you actually proving here                                             |
 | Local laptop to run tests                     | other variables into play (open applications, IO, network)                     |
 | Using default mongodb parameters              | use production parameters and enterprise conditions: security, HA              |
+
+### Optimizing CRUD Operations
+
+    // run an explained query (COLLSCAN & in-memory sort)
+    exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+
+    // create a naive index
+    db.restaurants.createIndex({"address.zipcode": 1,"cuisine": 1,"stars": 1})
+
+    // rerun the query (uses the index, but isn't very selective and still does an in-memory sort)
+    exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+
+_Index Selectivity_: make sure the most selective fields are first
+
+    // see how many documents match 50000 for zipcode (10)
+    db.restaurants.find({ "address.zipcode": '50000' }).count()
+
+    // see how many documents match our range (about half)
+    db.restaurants.find({ "address.zipcode": { $gt: '50000' } }).count()
+
+    // see how many documents match an equality condition on cuisine (~2%)
+    db.restaurants.find({ cuisine: 'Sushi' }).count()
+
+    // reorder the index key pattern to be more selective
+    db.restaurants.createIndex({ "cuisine": 1, "address.zipcode": 1, "stars": 1 })
+
+    // and rerun the query (faster, still doing an in-memory sort)
+    exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+
+_Equality, sort, range_: When building an index, this is a great rule to select fields.
+
+- **equality**: indexed fields on which our queries will do equality matching
+- **sort**: indexed fields on which our queries will sort on
+- **range**: indexed fields on which our queries will have a range condition
+
+  // swap stars and zipcode to prevent an in-memory sort
+  db.restaurants.createIndex({ "cuisine": 1, "stars": 1, "address.zipcode": 1 })
+  |_ Equality |_ Sort |\_Range
+
+  // awesome, no more in-memory sort! (uses the equality, sort, range rule)
+  exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+
+_Performance tradeoffs_: Sometimes it makes sense to be a little bit less selective to prevent in memory sorts since the execution time will be the lowest.
+
+More information on [Create indexes to support your queries](https://docs.mongodb.com/manual/tutorial/create-indexes-to-support-queries/?jmp=university), [Use indexes to sort query results](https://docs.mongodb.com/manual/tutorial/sort-results-with-indexes/?jmp=university), [Create queries that ensure selectivity](https://docs.mongodb.com/manual/tutorial/create-queries-that-ensure-selectivity/?jmp=university)
+
+### Covered Queries
+
+Covered queries have high performance when interacting with a database. They are entirely satisfied by index keys, 0 documents need to be examined.
+
+> A index covers a query if all fields are part of the index and all fields returned in the result are in the index.
+
+    // create a compound index on three fields
+    db.restaurants.createIndex({name: 1, cuisine: 1, stars: 1})
+
+    // checkout a projected query
+    db.restaurants.find({name: { $gt: 'L' }, cuisine: 'Sushi', stars: { $gte: 4.0 } }, { _id: 0, name: 1, cuisine: 1, stars: 1 })
+
+Not possible when
+
+- Indexed fields are arrays
+- Indexed fields are embedded documents
+- Run against a mongos if index does not contain the shard key
+
+More information on [Query Optimization](https://docs.mongodb.com/manual/core/query-optimization/?jmp=university)
+
+### Insert performance
+
+Two big performance contributors:
+
+_Index overhead_: severely increases read performance, downside of keeping indexes up to date every update/delete. Every index added impacts write performance.
+
+|                      |         |         |         |
+| -------------------- | ------- | ------- | ------- |
+| nr of indexes        | 0       | 1       | 5       |
+| avg inserts/s        | ~16.000 | ~15.000 | ~10.500 |
+| % loss from baseline | 0%      | ~6.3%   | ~34.4%  |
+
+> Around 6% write performance overhead per index increases the read performance by more than 10x.
+
+_Write concern_: fine-tuning write performance durability/performance
+
+- w: how many members of replica set will we wait for the write to be propagated to
+- j: boolean whether we wait for a physical write to journal file on disk
+- wtimeout: the amount of ms we want to the command to timeout. The write may still occur!
+
+|                      |         |         |                |               |
+| -------------------- | ------- | ------- | -------------- | ------------- |
+| write concern        | 1-false | 1-true  | majority-false | majority-true |
+| avg inserts/s        | ~27.000 | ~19.000 | ~16.000        | ~14.000       |
+| % loss from baseline | 0%      | ~29.6%  | ~40.7%         | ~48.1%        |
+
+> Tests performed on local machine talking to MongoDB Atlas cluster. Not a best case scenario.
+
+More information on [Write performance](https://docs.mongodb.com/manual/core/write-performance/?jmp=university)
+
+### Different data type implications
+
+_Querying_: you have to use the same data type in your filter than the field value in the document you are looking for.
+
+_Sorting_: sorting can happen intelligently on numerical values (int, numberdecimal). Documents will be grouped based on different bson type if field values are mixed. MinKey, Null, Numbers (int, long, double, decimal), symbol/string, objects...
+
+In order to get numeric sorting on non-numeric fields, a collation can be applied. The numeric and other fields will still be grouped separately and not merged!
+
+    // sort some shapes
+    db.shapes.find({}, {base:1, _id:0}).sort({base:1})
+
+    // create an index with a numeric ordering collation
+    db.shapes.createIndex({base: 1}, {collation: {locale: 'en', **numericOrdering**: true}})
+
+    // now the sort will be in numeric order grouped for each data type
+    db.shapes.find({}, {base:1, _id:0}).sort({base:1})
+
+_Application Implications_: it's important to maintain the same data type for fields across different documents to avoid application data consistency issues, reduce complexity for build and test codebase. You can ensure correctness by using document validation on the fields that matter.
+
+### Performance considerations in distributed systems
+
+Implications include
+
+- Consider latency
+- Data is spread across different nodes
+- Read implications
+- Write implications
+
+Before sharding
+
+- sharding is horizontal scaling
+- have we reached limits of vertical scaling
+- understand how data grows and data is accessed
+- define a good shard key
+
+In a sharded environment
+
+- latency in application is caused
+  - collocating mongos in same network zone as replica set
+  - replica set nodes low latency
+  - zone based sharding has a conceptual latency cost
+- attention to: scatter-gather queries, routed queries
+- attention to: sorting, limit & skip
 
 ## Extra: MongoDB World '17: Sizing MongoDB clusters
 

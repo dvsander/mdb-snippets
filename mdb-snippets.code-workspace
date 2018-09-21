@@ -37,6 +37,7 @@
 			"mongostat",
 			"mpaa",
 			"nhtt",
+			"numberdecimal",
 			"oplog",
 			"rbid",
 			"readconcern",
