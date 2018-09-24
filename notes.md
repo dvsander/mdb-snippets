@@ -2,6 +2,8 @@
 
 These are notes taken during technical training and experimenting with MongoDB.
 
+Last modification: {{ file.mtime }}
+
 <!-- TOC -->
 
 - [MongoDB Technical Training notes](#mongodb-technical-training-notes)
@@ -110,7 +112,10 @@ These are notes taken during technical training and experimenting with MongoDB.
     - [Covered Queries](#covered-queries)
     - [Insert performance](#insert-performance)
     - [Different data type implications](#different-data-type-implications)
-    - [Performance considerations in distributed systems](#performance-considerations-in-distributed-systems)
+    - [Performance consideration: Sharding](#performance-consideration-sharding)
+    - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
+    - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
+    - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
   - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
     - [The sizing process](#the-sizing-process)
     - [Estimating IOPS](#estimating-iops)
@@ -1956,12 +1961,12 @@ _Equality, sort, range_: When building an index, this is a great rule to select 
 - **sort**: indexed fields on which our queries will sort on
 - **range**: indexed fields on which our queries will have a range condition
 
-  // swap stars and zipcode to prevent an in-memory sort
-  db.restaurants.createIndex({ "cuisine": 1, "stars": 1, "address.zipcode": 1 })
-  |_ Equality |_ Sort |\_Range
+The most efficient index for the query, with avoiding in-memory sort becomes:
 
-  // awesome, no more in-memory sort! (uses the equality, sort, range rule)
-  exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+    exp.find({ "address.zipcode": { $gt: '50000' }, cuisine: 'Sushi' }).sort({ stars: -1 })
+
+    db.restaurants.createIndex({ "cuisine": 1, "stars": 1, "address.zipcode": 1 })
+                                       |-> Equality |> Sort |>_Range
 
 _Performance tradeoffs_: Sometimes it makes sense to be a little bit less selective to prevent in memory sorts since the execution time will be the lowest.
 
@@ -2036,7 +2041,9 @@ In order to get numeric sorting on non-numeric fields, a collation can be applie
 
 _Application Implications_: it's important to maintain the same data type for fields across different documents to avoid application data consistency issues, reduce complexity for build and test codebase. You can ensure correctness by using document validation on the fields that matter.
 
-### Performance considerations in distributed systems
+### Performance consideration: Sharding
+
+With horizontal scaling our cost to scale increases linearly, whereas that is not the case with vertical scaling because single servers become increasingly more expensive as you upgrade them.
 
 Implications include
 
@@ -2052,14 +2059,78 @@ Before sharding
 - understand how data grows and data is accessed
 - define a good shard key
 
-In a sharded environment
+Choosing the right shard key is crucial. Any bad splitting can cause
 
+- hot zones: relatively more traffic is sent to one node due to the shard key, e.g. family name "brown". A classic example is monotonically increasing/decreasing shard keys since all traffic goes to max_key node
+- jumbo chunks: relatively more data is kept in one shard: the lower bound == upper bound
+
+Considerations:
+
+- bulk writes in sharded clusters favor unordered writes. Ordered writes work sequentially and continue after each insert's success. Due to the sharded nature the latency is higher and parallel writes are faster
+- all read and writes go through mongos
 - latency in application is caused
   - collocating mongos in same network zone as replica set
   - replica set nodes low latency
   - zone based sharding has a conceptual latency cost
 - attention to: scatter-gather queries, routed queries
 - attention to: sorting, limit & skip
+
+### Performance consideration: Reading from secondaries
+
+See chapter on [Read Concerns](#read-concerns).
+
+Whenever reading from a secondary, stale reads can occur. MongoDB favors strong consistency by always write to a primary/master node.
+
+A good idea when
+
+- offloading work: an analytics or reporting job against data. Queries are typically long-running and resource hogging.
+- local reads: in geo-distributed replica sets one can prefer to read from a node that's deployed in a datacenter close to the application/user
+
+A bad idea when
+
+- in general: secondaries exist for HA, not increased performance
+- extra capacity for reads: a wrong belief to offload reads from primaries because it handles all the writes. The writes are propagated to the secondaries so all nodes in the replica set handle the same amount of write traffic
+- reads from shards: **never** a good idea to connect to individual shards, even worse the secondaries
+
+> You should never read from a secondary on a sharded cluster. When you do this you might get stale results with missing or duplicated data because of incomplete or terminated chunk migrations.
+
+### Performance consideration: Replica sets with differing indexes
+
+An architecture relying on secondary nodes with specific indexes have limited use cases:
+
+- Specific analytics on secondary nodes
+- Reporting on delayed consistency data
+- Text search
+
+> A secondary should never be allowed to become primary. If we were to allow it to become primary our application will experience the different set of indexes, once it becomes primary. That will potentially affect your application's expected performance.
+
+They key to making it work is
+
+    # create a replica set with one node having priority 0
+    # shutdown the secondary with priority 0 and restart it as a standalone
+    mongod --port 27002 --dbpath /data/r2 --logpath /data/r2/standalone.log --fork
+
+    # connect to that node and create the unique index
+    # run a query that will use the new index
+
+    # restart it with it's original config and reconnect to the replica set
+
+    # on the primary, rerun the last query (doesn't use our index)
+    # on the secondary, confirm that we can still use the new index on the secondary
+
+### Performance consideration: Aggregation pipeline on a sharded cluster
+
+Aggregation queries are easy to reason about in standalone or clustered deployments. In sharded clusters there are some caveats one needs to be aware of:
+
+- Use as first action a $match on the shard key. The query can be routed to the shard containing all information.
+- $out, $facet, $lookup, $graphLookup are PRIMARY-only, others will merge on a random shard.
+
+Aggregation optimizations:
+
+- sort-match is better written as match-sort
+- skip-limit is better written as limit-skip
+- limit-limit is better written as limit (lowest wins)
+- match-match is better written as one match containing the 2 filters
 
 ## Extra: MongoDB World '17: Sizing MongoDB clusters
 
