@@ -7,122 +7,140 @@ Last modification: {{ file.mtime }}
 <!-- TOC -->
 
 - [MongoDB Technical Training notes](#mongodb-technical-training-notes)
-  - [Connection Details](#connection-details)
-  - [Data types](#data-types)
-  - [Use cases](#use-cases)
-    - [Navigating via command line](#navigating-via-command-line)
-    - [Finding the distinct values for a particular field in a collection](#finding-the-distinct-values-for-a-particular-field-in-a-collection)
-    - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
-    - [Inserting one single document](#inserting-one-single-document)
-    - [Inserting multiple documents](#inserting-multiple-documents)
-    - [Reading documents](#reading-documents)
-    - [Projection on documents](#projection-on-documents)
-    - [Updating documents](#updating-documents)
-    - [Update many documents](#update-many-documents)
-    - [Upserts](#upserts)
-    - [Replace one](#replace-one)
-    - [Delete](#delete)
-    - [Advanced query operators](#advanced-query-operators)
-      - [Comparison operators](#comparison-operators)
-      - [Element operators](#element-operators)
-      - [Logical operators](#logical-operators)
-      - [Array operators](#array-operators)
-      - [Regex](#regex)
-  - [The MongoD](#the-mongod)
-    - [Starting the server](#starting-the-server)
-    - [Shutting down the server](#shutting-down-the-server)
-    - [Architecture](#architecture)
-    - [Data structures](#data-structures)
-    - [Configuration file](#configuration-file)
-    - [Creating users via command line](#creating-users-via-command-line)
-    - [Folder hierarchy](#folder-hierarchy)
-    - [Basic linux](#basic-linux)
-    - [Basic mongo shell commands](#basic-mongo-shell-commands)
-      - [Logging basics](#logging-basics)
-      - [Profiling the database](#profiling-the-database)
-    - [Collation](#collation)
-  - [Security](#security)
-    - [Introduction to security](#introduction-to-security)
-    - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
-    - [Terminology](#terminology)
-      - [Resources](#resources)
-      - [Privileges](#privileges)
-      - [Role inheritance](#role-inheritance)
-      - [Network Authentication Restrictions](#network-authentication-restrictions)
-    - [Built in roles](#built-in-roles)
-  - [Server Tools Overview](#server-tools-overview)
-    - [mongostat](#mongostat)
-    - [mongodump and mongorestore](#mongodump-and-mongorestore)
-    - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
-  - [Replication](#replication)
-    - [Setting up a MongoDB replica set](#setting-up-a-mongodb-replica-set)
-      - [How to initiate a replica set](#how-to-initiate-a-replica-set)
-      - [How to add nodes to a replica set](#how-to-add-nodes-to-a-replica-set)
-      - [How to check the status of a replica set](#how-to-check-the-status-of-a-replica-set)
-    - [The Replication Configuration Document](#the-replication-configuration-document)
-    - [Replication commands](#replication-commands)
-    - [The oplog](#the-oplog)
-      - [Configuring the oplog](#configuring-the-oplog)
-      - [Querying the oplog](#querying-the-oplog)
-      - [One final thing about oplog and the local database](#one-final-thing-about-oplog-and-the-local-database)
-    - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
-    - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
-    - [Failover and elections](#failover-and-elections)
-  - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
-    - [Write concern](#write-concern)
-    - [Read concerns](#read-concerns)
-    - [Read preference](#read-preference)
-  - [Sharding](#sharding)
-    - [When to shard](#when-to-shard)
-    - [Sharding Architecture](#sharding-architecture)
-    - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
-      - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
-      - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
-      - [Enable replica set to be a shard](#enable-replica-set-to-be-a-shard)
-      - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
-    - [Config database](#config-database)
-    - [Shard keys](#shard-keys)
-      - [How to shard](#how-to-shard)
-      - [Picking a good shard key](#picking-a-good-shard-key)
-      - [Hashed shard keys](#hashed-shard-keys)
-    - [Chunks](#chunks)
-    - [Balancing](#balancing)
-    - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
-    - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
-    - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
-  - [Indexes](#indexes)
-    - [What are indexes](#what-are-indexes)
-    - [Types of indexes](#types-of-indexes)
-      - [Single field indexes](#single-field-indexes)
-      - [Compound indexes](#compound-indexes)
-      - [Multi-key indexes](#multi-key-indexes)
-      - [Partial indexes](#partial-indexes)
-      - [Sparse indexes](#sparse-indexes)
-    - [Sorting with indexes](#sorting-with-indexes)
-    - [Index operations](#index-operations)
-    - [Query plans](#query-plans)
-    - [Explain plans](#explain-plans)
-    - [Resource allocation for indexes](#resource-allocation-for-indexes)
-  - [MongoDB Performance](#mongodb-performance)
-    - [How data is stored on disk](#how-data-is-stored-on-disk)
-      - [Physical files](#physical-files)
-      - [Journaling](#journaling)
-    - [Basic benchmarking](#basic-benchmarking)
-    - [Optimizing CRUD Operations](#optimizing-crud-operations)
-    - [Covered Queries](#covered-queries)
-    - [Insert performance](#insert-performance)
-    - [Different data type implications](#different-data-type-implications)
-    - [Performance consideration: Sharding](#performance-consideration-sharding)
-    - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
-    - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
-    - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
-  - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
-    - [The sizing process](#the-sizing-process)
-    - [Estimating IOPS](#estimating-iops)
-    - [Estimating data size](#estimating-data-size)
-    - [Estimating the working set](#estimating-the-working-set)
-    - [Estimating the CPU](#estimating-the-cpu)
-    - [Estimating the need for sharding](#estimating-the-need-for-sharding)
+    - [Connection Details](#connection-details)
+    - [Data types](#data-types)
+    - [Use cases](#use-cases)
+        - [Navigating via command line](#navigating-via-command-line)
+        - [Finding the distinct values for a particular field in a collection](#finding-the-distinct-values-for-a-particular-field-in-a-collection)
+        - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
+        - [Inserting one single document](#inserting-one-single-document)
+        - [Inserting multiple documents](#inserting-multiple-documents)
+        - [Reading documents](#reading-documents)
+        - [Projection on documents](#projection-on-documents)
+        - [Updating documents](#updating-documents)
+        - [Update many documents](#update-many-documents)
+        - [Upserts](#upserts)
+        - [Replace one](#replace-one)
+        - [Delete](#delete)
+        - [Advanced query operators](#advanced-query-operators)
+            - [Comparison operators](#comparison-operators)
+            - [Element operators](#element-operators)
+            - [Logical operators](#logical-operators)
+            - [Array operators](#array-operators)
+            - [Regex](#regex)
+    - [The MongoD](#the-mongod)
+        - [Starting the server](#starting-the-server)
+        - [Shutting down the server](#shutting-down-the-server)
+        - [Architecture](#architecture)
+        - [Data structures](#data-structures)
+        - [Configuration file](#configuration-file)
+        - [Creating users via command line](#creating-users-via-command-line)
+        - [Folder hierarchy](#folder-hierarchy)
+        - [Basic linux](#basic-linux)
+        - [Basic mongo shell commands](#basic-mongo-shell-commands)
+            - [Logging basics](#logging-basics)
+            - [Profiling the database](#profiling-the-database)
+        - [Collation](#collation)
+    - [Security](#security)
+        - [Introduction to security](#introduction-to-security)
+        - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
+        - [Terminology](#terminology)
+            - [Resources](#resources)
+            - [Privileges](#privileges)
+            - [Role inheritance](#role-inheritance)
+            - [Network Authentication Restrictions](#network-authentication-restrictions)
+        - [Built in roles](#built-in-roles)
+    - [Server Tools Overview](#server-tools-overview)
+        - [mongostat](#mongostat)
+        - [mongodump and mongorestore](#mongodump-and-mongorestore)
+        - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
+    - [Replication](#replication)
+        - [Setting up a MongoDB replica set](#setting-up-a-mongodb-replica-set)
+            - [How to initiate a replica set](#how-to-initiate-a-replica-set)
+            - [How to add nodes to a replica set](#how-to-add-nodes-to-a-replica-set)
+            - [How to check the status of a replica set](#how-to-check-the-status-of-a-replica-set)
+        - [The Replication Configuration Document](#the-replication-configuration-document)
+        - [Replication commands](#replication-commands)
+        - [The oplog](#the-oplog)
+            - [Configuring the oplog](#configuring-the-oplog)
+            - [Querying the oplog](#querying-the-oplog)
+            - [One final thing about oplog and the local database](#one-final-thing-about-oplog-and-the-local-database)
+        - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
+        - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
+        - [Failover and elections](#failover-and-elections)
+    - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
+        - [Write concern](#write-concern)
+        - [Read concerns](#read-concerns)
+        - [Read preference](#read-preference)
+    - [Sharding](#sharding)
+        - [When to shard](#when-to-shard)
+        - [Sharding Architecture](#sharding-architecture)
+        - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
+            - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
+            - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
+            - [Enable replica set to be a shard](#enable-replica-set-to-be-a-shard)
+            - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
+        - [Config database](#config-database)
+        - [Shard keys](#shard-keys)
+            - [How to shard](#how-to-shard)
+            - [Picking a good shard key](#picking-a-good-shard-key)
+            - [Hashed shard keys](#hashed-shard-keys)
+        - [Chunks](#chunks)
+        - [Balancing](#balancing)
+        - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
+        - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
+        - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
+    - [Indexes](#indexes)
+        - [What are indexes](#what-are-indexes)
+        - [Types of indexes](#types-of-indexes)
+            - [Single field indexes](#single-field-indexes)
+            - [Compound indexes](#compound-indexes)
+            - [Multi-key indexes](#multi-key-indexes)
+            - [Partial indexes](#partial-indexes)
+            - [Sparse indexes](#sparse-indexes)
+        - [Sorting with indexes](#sorting-with-indexes)
+        - [Index operations](#index-operations)
+        - [Query plans](#query-plans)
+        - [Explain plans](#explain-plans)
+        - [Resource allocation for indexes](#resource-allocation-for-indexes)
+    - [MongoDB Performance](#mongodb-performance)
+        - [How data is stored on disk](#how-data-is-stored-on-disk)
+            - [Physical files](#physical-files)
+            - [Journaling](#journaling)
+        - [Basic benchmarking](#basic-benchmarking)
+        - [Optimizing CRUD Operations](#optimizing-crud-operations)
+        - [Covered Queries](#covered-queries)
+        - [Insert performance](#insert-performance)
+        - [Different data type implications](#different-data-type-implications)
+        - [Performance consideration: Sharding](#performance-consideration-sharding)
+        - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
+        - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
+        - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
+    - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
+        - [The sizing process](#the-sizing-process)
+        - [Estimating IOPS](#estimating-iops)
+        - [Estimating data size](#estimating-data-size)
+        - [Estimating the working set](#estimating-the-working-set)
+        - [Estimating the CPU](#estimating-the-cpu)
+        - [Estimating the need for sharding](#estimating-the-need-for-sharding)
+    - [Advanced clustering](#advanced-clustering)
+        - [Balancer internals](#balancer-internals)
+        - [The config database](#the-config-database)
+        - [Upgrades on sharded clusters](#upgrades-on-sharded-clusters)
+        - [Mongos processes](#mongos-processes)
+        - [Chunk splitting overview](#chunk-splitting-overview)
+        - [Zone based sharding (previously tag based sharding)](#zone-based-sharding-previously-tag-based-sharding)
+        - [Hash based sharding](#hash-based-sharding)
+        - [Empty chunks](#empty-chunks)
+        - [Data imbalance scenario](#data-imbalance-scenario)
+        - [Removing a shard](#removing-a-shard)
+            - [How to query the size of the data inside a chunk - (mapping metadata to physical size!)](#how-to-query-the-size-of-the-data-inside-a-chunk---mapping-metadata-to-physical-size)
+    - [Tooling overview](#tooling-overview)
+        - [Server logs](#server-logs)
+        - [Mongo shell](#mongo-shell)
+        - [Profiler](#profiler)
+        - [Mongostat, mongotop, mongoreplay](#mongostat-mongotop-mongoreplay)
+        - [mtools package](#mtools-package)
 
 <!-- /TOC -->
 
@@ -2255,3 +2273,523 @@ Calculation based on input gathered in previous steps on disk space and RAM.
   - 20K IOPS AWS
   - 50K/20K = 2.5
   - => 3 shards required
+
+## Advanced clustering
+
+### Balancer internals
+
+Administrative commands:
+
+    sh.getBalancerState()
+    sh.stopBalancer() #disable completely - graceful completion of running activities
+    sh.startBalancer() #restart
+
+    sh.disableBalancing("database.collectionname")  #disable for collection
+    sh.enableBalancing("database.collectionname") # restart for collection
+
+    #check the settings
+    use config
+    db.collections.find().pretty()
+    db.settings.find().pretty()
+
+The thresholds apply to **the difference in number of chunks between the shard with the most chunks for the collection and the shard with the fewest chunks for that collection**. The balancer has the following thresholds: Prior to 2.2: difference of 8 chunks or more. After 2.2, total chunks:
+
+- 1-19: 2 diff
+- 20-79: 4 diff
+- 80+: 8 diff
+
+The balancer picks the chunks to move one chunk at a time and they move from the the shard with the most chunks for the collection to the shard with the fewest chunks for that collection.
+
+- It moves chunks from the shard with the highest chunk count
+- It moves the chunk with the lowest range (lowest ranged chunk on that shard)
+- It moves the chunk to the shard with the lowest chunk count
+
+Essential questions in planning a strategy for scaling out with shards:
+
+- By what factors should I measure the capacity of my system?
+- How many shards to I need to add to keep my capacity under 80%?
+- What growth trend does my application follow along my primary capacity metric?
+
+### The config database
+
+Useful commands
+
+    use config
+    sh.status
+    show collections
+
+Interesting collections
+
+| Collection         | Description                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| db.settings        | global sharded cluster settings                                                              |
+| db.mongos          | all mongos processes connected to this cluster                                               |
+| db.changelog       | a 10MB capped collection with details about the migration process (splitting, moving chunks) |
+| db.locks           | mongos specific locks on e.g. balancing                                                      |
+| **db.chunks**      | details about each chunk in the sharded collection                                           |
+| **db.databases**   |                                                                                              |
+| **db.collections** | details about the sharded collections with shardkey                                          |
+| **db.shards**      |                                                                                              |
+| **db.version**     |                                                                                              |
+
+Bold collections in the config database are checked across all servers for consistency.
+
+> Never update the config database directly. Always use helpers and do it through the mongos.
+
+### Upgrades on sharded clusters
+
+Always check the release notes, upgrade notes and upgrade instructions per version. Sometimes (most versions < 3.0 ) a specific upgrade order is required.
+
+General order:
+
+- Upgrade shards
+  - Secondaries of the shards first. Each shard being a replica set, this can be done in parallel.
+  - Upgrade primaries (step down). Don't parallelize this to minimize connection overhead.
+- Upgrade config servers
+- Upgrade mongos processes
+
+### Mongos processes
+
+A connection pool is maintained to limit the amount of 3-way handshakes needed as the TCP protocol mandates.
+
+It manages sharded cluster metadata in the config server replica set. It updates and caches this data.
+You can evict the cache with the command
+
+    db.runCommand({flushRouterConfig : 1})
+
+### Chunk splitting overview
+
+Chunks are not physical data. It is logical data grouping/partitioning. It's described by the metadata. If you split a chunk there is no change to actual data, it changes the metadata.
+
+How the splitting process works:
+
+- Mongos tracks writes to chunks
+- If it detects 20% of the max chunk size is written, it asks the primary shard for a split vector
+- The primary returns a list of split points
+- Update the metadata to reflect that split. No data has moved, no data has changed
+
+How to manually pre-split a collection:
+
+> Pre-splitting can only be done **before** you insert data
+
+When:
+
+- You have decided on a domain shard key
+- You have multiple shards up and running
+- You will be doing a bulk load and want to avoid bottlenecks during the process (balancing)
+
+Advantages:
+
+- You can decide which shard has which data range initially if you pre-split the data
+- Migration takes time, especially when the system is under load
+- Additional benefits: you can have larger chunks if you split manually
+
+How:
+
+- Calculate the avg document size
+- Calculate the rough amount of docs
+- Calculate the total data size = avg doc size \* nr of docs
+- Calculate the amount of chunks needed
+  - No! total data size / chunk size (64MB) This will fill up all chunks 100%
+  - Yes! total data size / chunk size / 2 (32MB) This will fill up all chunks 50%
+- Write a script...
+  - For each chunk you want to create, construct low
+  - Feed this in to the split command
+
+Command:
+
+    // make sure the collection exists, can be empty
+
+    // stop the balancer
+    sh.stopBalancer()
+
+    db.adminCommand({ split : "db.collectionname", middle: { id : prefix } });
+
+    // restart the balancer
+    sh.startBalancer()
+
+### Zone based sharding (previously tag based sharding)
+
+Pin collections or ranges to specific shards.
+
+Example: Spin up a sharded cluster with three shards. In a database called houses create collections named lannister, stark, and targaryen. Set up your cluster so that the collection representing each house is pinned to one of the shards.
+
+    b.createCollection("lannister")
+    db.createCollection("stark")
+    db.createCollection("targaryen")
+
+    sh.enableSharding("houses")
+    sh.shardCollection("houses.lannister", {"_id" : 1})
+    sh.shardCollection("houses.stark", {"_id" : 1})
+    sh.shardCollection("houses.targaryen", {"_id" : 1})
+
+    sh.addShardTag("m103-repl", "coll-lannister")
+    sh.addShardTag("m103-repl-2", "coll-stark")
+    sh.addShardTag("m103-repl-3", "coll-targaryen")
+
+    sh.addTagRange("houses.lannister", { _id : MinKey}, { _id : MaxKey}, "coll-lannister")
+    sh.addTagRange("houses.stark", { _id : MinKey}, { _id : MaxKey}, "coll-stark")
+    sh.addTagRange("houses.targaryen", { _id : MinKey}, { _id : MaxKey}, "coll-targaryen")
+
+Caveats
+
+- In an existing dataset a chunk can span a range. e.g. postcodes: pin 100-200, 200-300 and you have a chunk 150-220
+  - The balancer compares the lowest boundary of the chunk to the maximum of the tagged, it would go in the 100-200 shard.
+- In case of "left-over" chunks on other shards the balancer may not kick in
+  - Run the moveChunk administrative command
+  - Be sure the stop the balancer!
+
+### Hash based sharding
+
+Similar considerations to pre-splitting: High cardinality, Floating point numbers discouraged
+
+    db.collection.ensureIndex({"\_id" : "hashed"})
+    sh.shardCollection("db.collection", {"\_id" : "hashed"})
+
+    # initially hashed sharding created 2 chunks on each shard. If you want to make more:
+    db.adminCommand({shardCollection : "db.collection", key : {"_id" : "hashed"}, numInitialChunks : 2048})
+
+| Pro                      | Con                                   |
+| ------------------------ | ------------------------------------- |
+| Very efficient at writes | > 1 document fetched = scatter gather |
+| Equal distribution       | MongoS can become bottleneck          |
+|                          | Only as fast as the slowest shard     |
+
+### Empty chunks
+
+How come?
+
+- Pre-splitting mistake
+- Time based shard key (monotonically increasing e.g. ObjectId) and periodically deleting data
+  - Shard 1 fills up with 500 chunks
+  - Shard 2 comes up - Balancer distributes from most chunks to lowest chunks and all lowest ranges
+  - Shard 1 contains the 250 most recent chunks - Shard 2 contains the 250 oldest chunks
+  - You decide to archive all old data
+  - Shard 2 can end up with 0 data
+
+How solve?
+
+- Pre 2.6: Stop the balancer and manually move chunks
+- After 2.6:
+  - run the mergeChunk command
+  - chunks need to be on the same shard
+  - chunks need to be a continuous range
+  - one, or both, must be empty
+
+The command, where min is the lowest boundary of the first chunk and max is the highest boundary of the second chunk to merge.
+
+    db.runCommand( { mergeChunks : "database.collection" , bounds : [ min , max ] } )
+
+### Data imbalance scenario
+
+One shard contains 6GB of data and the second shard 500MB.
+
+Why?
+
+- Poor shard key: chunk is no longer splittable
+- Pre-splitting error
+- Balancer is turned off
+- Waiting for the chunks to be split, auto-splits require traffic
+
+How solve?
+
+- Wait for the balancer to do his job
+- Turn balancer off, manual splits, wait for the balancer
+- Turn balancer off, manual splits, manual move
+
+### Removing a shard
+
+Why?
+
+- Should not be done lightly
+- Going to be slow
+
+> The balancer needs to running for the drain of the shard!
+
+How?
+
+- run the removeShard command
+- wait for all chunks to be migrated off
+- move any databases that have that shard as their primary with movePrimary command
+- run the removeShard command again
+
+#### How to query the size of the data inside a chunk - (mapping metadata to physical size!)
+
+Query:
+
+    mongos> first_doc = db.chunks.find().next()
+    {
+        "_id" : "myapp.users-email_MinKey",
+        "lastmod" : Timestamp(2, 0),
+        "lastmodEpoch" : ObjectId("538e27be31972172d9b3ec61"),
+        "ns" : "myapp.users",
+        "min" : {
+            "email" : { "$minKey" : 1 }
+        },
+        "max" : {
+            "email" : "aa"
+        },
+        "shard" : "test-rs1"
+    }
+    mongos> min = first_doc.min
+    { "email" : { "$minKey" : 1 } }
+    mongos> max = first_doc.max
+    { "email" : "aa" }
+    mongos> keyPattern = { email : 1 }
+    { "email" : 1 }
+    mongos> ns = first_doc.ns
+    myapp.users
+    mongos> db.runCommand({dataSize: ns, keyPattern: keyPattern, min: min, max: max } )
+    { "size" : 0, "numObjects" : 0, "millis" : 0, "ok" : 1 }
+
+## Tooling overview
+
+Programs
+
+| Program     | Feature                                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| mongostat   | shows current activity on a server in real time                                                                |
+| mongotop    | how current activity is distributed across collections/databases                                               |
+| mongoreplay | monitor, record and replay network traffic to recreate a query load at a later time and another location       |
+| mongooplog  | locally applying oplog entries polled from a remote server                                                     |
+| mongo       | administrative shell                                                                                           |
+| profiler    | logs queries                                                                                                   |
+| compass     | graphical UI to look at state of the DB in real time                                                           |
+| mtools      | includes the log parsing tools, mlogfilter and mloginfo, and the visualization tools, mlogvis and mplotqueries |
+| mongofiles  | helper for gridfs                                                                                              |
+| mongoperf   | performance testing tool                                                                                       |
+| mongoldap   | validate the connectivity and validation against ldap                                                          |
+
+### Server logs
+
+Typical usages:
+
+- How many connections your server has
+- Which of your queries have been long-running
+
+Useful commands
+
+    # collect process id
+    processId=$(ps -ef | grep mongod | grep primary | awk '{print $2}')
+
+    # open logs file
+    less /data/rs/p/mongod.log
+
+    # filter out all the CONTROL lines and timestamp for better reading
+    cat /data/rs/p/mongod.log | grep -v 'CONTROL' | sed "s/[^ ]* //"
+
+    # only show the keys for a document
+    Object.keys (db.serverStatus())
+
+Server log components
+
+- ACCESS
+- COMMAND
+- CONTROL
+- GEO
+- INDEX
+- NETWORK
+- QUERY
+- REPL
+- SHARDING
+- STORAGE
+- JOURNAL
+- WRITE
+
+### Mongo shell
+
+You can connect to the MongoDB server, particularly for administration but also for practicing MongoDB operations, and it's also a Javascript interpreter capable of running (javascript) scripts.
+
+    db.currentOp()
+
+Shows what the server is doing **right now**.
+
+"Long-running operations" is the only answer to which one could give an unqualified yes. Connections that have been open for a long time may not be associated with any particular operation, so they won't show up in currentOps unless they are running an operation currently.
+
+Short-lived operations may show up in currentOp, but they will only be present if it is run when the operation is in progress. In general, db.currentOp is bad at finding short-lived processes, even ones that are numerous.
+
+    db.serverStatus()
+
+Overview of the important metrics of the database. A huge document containing
+
+- Instance info
+- **Asserts**
+- **Connections and network**
+- **Locking**
+- **Operation stats**
+- Security
+- Replication stats
+- Storage engine stats
+- **Metrics**
+
+**bold** ones are useful for debugging.
+
+    # run server status
+    mongo --eval ' db.serverStatus() '
+
+    # run serverStatus by projecting only certain fields
+    mongo --eval ' db.runCommand({ serverStatus: 1, repl: 0, metrics: 0, locks: 1, wiredTiger: 0}) '
+
+    # using Object.keys() object
+    mongo --eval ' Object.keys( db.serverStatus()) '
+
+    # for loop that iterates over few documents with a sleep
+    mongo --eval ' while(true) { for (i=1; i<=10; i++){
+    db.things.insertOne({}); sleep(1000);
+    }} '
+
+    # check the number of inserts that occurred since the mongod has been up
+    mongo --eval ' db.serverStatus().opcounters.insert '
+
+    # some of different information in the `serverStatus`
+    mongo --eval '
+    db.serverStatus().host;
+    db.serverStatus().version;
+    db.serverStatus().process;
+    db.serverStatus().pid;
+    db.serverStatus().uptime;
+    db.serverStatus().uptimeMillis;
+    db.serverStatus().localTime;'
+
+    # check the number of connections
+    mongo --eval ' db.serverStatus().connections '
+
+    # check locks
+    mongo --eval ' db.serverStatus().locks '
+
+    # check operation counters
+    mongo --eval ' db.serverStatus().opcounters '
+
+    # check replication operation counters
+    mongo --eval ' db.serverStatus().opcountersRepl '
+
+    # check operation latencies counters
+    mongo --eval ' db.serverStatus().opLatencies '
+
+    # check wiredTiger statistics
+    mongo --eval ' db.serverStatus().wiredTiger '
+
+    # check memory statistics
+    mongo --eval ' db.serverStatus().mem '
+
+    # check metrics
+    mongo --eval ' db.serverStatus().metrics '
+
+    # check metrics commands
+    mongo --eval ' db.serverStatus().metrics.commands '
+
+    # check metrics documents
+    mongo --eval ' db.serverStatus().metrics.document '
+    # how they relate with opcounters
+    mongo --eval ' db.serverStatus().opcounters '
+
+    # correlation between inserts and document inserted
+    mongo --eval ' db.serverStatus().opcounters.insert '
+    mongo --eval ' db.serverStatus().metrics.document.inserted '
+
+    # insert several documents
+    mongo --eval ' db.things.insertMany([
+    { n: 1}, { n: 2}, { n: 3}, { n: 4}, { n: 5},
+    ]) '
+
+    # check correlation after executing inserts
+    mongo --eval ' db.serverStatus().opcounters.insert '
+    mongo --eval ' db.serverStatus().metrics.document.inserted '
+
+    # correlation between updates and document updated
+    mongo --eval ' db.serverStatus().opcounters.update '
+    mongo --eval ' db.serverStatus().metrics.document.updated '
+
+    # update many
+    mongo --eval ' db.things.updateMany( { } , {$set: {someFlag: true}})
+    '
+    # correlation after executing update
+    mongo --eval ' db.serverStatus().opcounters.update '
+    mongo --eval ' db.serverStatus().metrics.document.updated '
+
+### Profiler
+
+> the profiler is a diagnostic tool, and you should expect it to routinely attenuate performance on a production system. Don't turn it on unless you're willing to accept that, and turn it off when you're done.
+
+    db.getProfilingLevel()
+    db.setProfilingLevel()
+    # 1 - queries over 100ms
+    # 2 - every query
+
+    db.system.profile.find().pretty()
+
+### Mongostat, mongotop, mongoreplay
+
+to know, in real time, the number of queries / second occurring in a given replica set, mongostat has this functionality. mongoreplay can capture the queries, but doesn't let me know how many are coming in each second in real-time. mongotop looks at time spent in each namespace, but doesn't count queries. mongoperf only looks at simulating a disk I/O load, not at monitoring performance at all
+
+    # launch some servers
+    mlaunch init --replicaset --name m312RS --wiredTigerCacheSizeGB 0.25 --oplogSize 100 --port 30000 --host localhost
+
+    # launch mongoreplay
+    sudo mongoreplay monitor -i lo -e "port 30000"
+
+    # launch mongostat
+    mongostat --port 30000
+
+    # mongostat in discover mode
+    mongostat --port 30000 --discover
+
+    # launch mongotop
+    mongotop --port 30000
+
+### mtools package
+
+mlogfilter
+slices log files by time, merges log files, filters slow queries, finds table scans, shortens log lines, filters by other attributes, convert to JSON
+
+mloginfo
+returns info about log file, like start and end time, version, binary, special sections like restarts, connections, distinct view
+
+mplotqueries
+visualize log files with different types of plots
+
+mlogvis
+creates a self-contained HTML file that shows an interactive visualization in a web browser (as an alternative to mplotqueries)
+
+mlaunch
+a script to quickly spin up local test environments, including replica sets and sharded systems (requires pymongo)
+
+See [mtools doc](https://github.com/rueckstiess/mtools)
+
+Useful commands
+
+    # `mloginfo` help
+    mloginfo --help | less
+
+    # `mlogvis` help
+    mlogvis --help | less
+
+    # `mlaunch` help
+    mlaunch --help | less
+
+    # `mgenerate` help
+    mgenerate --help | less
+
+    # launch replica set
+    mlaunch init --replicaset --nodes 3 --names M312
+
+    mlaunch init --replicaset --name m312RS --wiredTigerCacheSizeGB 0.3 --hostname localhost --port 30000
+
+    # connect to initialized replica set
+    mongo --host $(hostname):27017
+
+    # generate dataset
+    cat /shared/schema.json
+    mgenerate /shared/schema.json
+
+    # find generated document documents
+    echo ' db.mgendata.findOne() ' | mongo --quiet
+
+    # analyze the log data from `rs1`
+    mloginfo /home/vagrant/data/replset/rs1/mongod.log
+
+    # filter log entries on namespace `SAMPLEDB.SAMPLECOLL`
+    mlogfilter /home/vagrant/data/replset/rs1/mongod.log --namespace SAMPLEDB.SAMPLECOLL
+
+    # analyze using a graphical representation of the logs entries
+    mlogvis /home/vagrant/data/replset/rs1/mongod.log -o /shared/visualization.html --no-browser
