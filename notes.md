@@ -4,143 +4,193 @@ These are notes taken during technical training and experimenting with MongoDB.
 
 Last modification: {{ file.mtime }}
 
-<!-- TOC -->
+<!-- TOC updateOnSave:false -->
 
 - [MongoDB Technical Training notes](#mongodb-technical-training-notes)
-    - [Connection Details](#connection-details)
-    - [Data types](#data-types)
-    - [Use cases](#use-cases)
-        - [Navigating via command line](#navigating-via-command-line)
-        - [Finding the distinct values for a particular field in a collection](#finding-the-distinct-values-for-a-particular-field-in-a-collection)
-        - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
-        - [Inserting one single document](#inserting-one-single-document)
-        - [Inserting multiple documents](#inserting-multiple-documents)
-        - [Reading documents](#reading-documents)
-        - [Projection on documents](#projection-on-documents)
-        - [Updating documents](#updating-documents)
-        - [Update many documents](#update-many-documents)
-        - [Upserts](#upserts)
-        - [Replace one](#replace-one)
-        - [Delete](#delete)
-        - [Advanced query operators](#advanced-query-operators)
-            - [Comparison operators](#comparison-operators)
-            - [Element operators](#element-operators)
-            - [Logical operators](#logical-operators)
-            - [Array operators](#array-operators)
-            - [Regex](#regex)
-    - [The MongoD](#the-mongod)
-        - [Starting the server](#starting-the-server)
-        - [Shutting down the server](#shutting-down-the-server)
-        - [Architecture](#architecture)
-        - [Data structures](#data-structures)
-        - [Configuration file](#configuration-file)
-        - [Creating users via command line](#creating-users-via-command-line)
-        - [Folder hierarchy](#folder-hierarchy)
-        - [Basic linux](#basic-linux)
-        - [Basic mongo shell commands](#basic-mongo-shell-commands)
-            - [Logging basics](#logging-basics)
-            - [Profiling the database](#profiling-the-database)
-        - [Collation](#collation)
-    - [Security](#security)
-        - [Introduction to security](#introduction-to-security)
-        - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
-        - [Terminology](#terminology)
-            - [Resources](#resources)
-            - [Privileges](#privileges)
-            - [Role inheritance](#role-inheritance)
-            - [Network Authentication Restrictions](#network-authentication-restrictions)
-        - [Built in roles](#built-in-roles)
-    - [Server Tools Overview](#server-tools-overview)
-        - [mongostat](#mongostat)
-        - [mongodump and mongorestore](#mongodump-and-mongorestore)
-        - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
-    - [Replication](#replication)
-        - [Setting up a MongoDB replica set](#setting-up-a-mongodb-replica-set)
-            - [How to initiate a replica set](#how-to-initiate-a-replica-set)
-            - [How to add nodes to a replica set](#how-to-add-nodes-to-a-replica-set)
-            - [How to check the status of a replica set](#how-to-check-the-status-of-a-replica-set)
-        - [The Replication Configuration Document](#the-replication-configuration-document)
-        - [Replication commands](#replication-commands)
-        - [The oplog](#the-oplog)
-            - [Configuring the oplog](#configuring-the-oplog)
-            - [Querying the oplog](#querying-the-oplog)
-            - [One final thing about oplog and the local database](#one-final-thing-about-oplog-and-the-local-database)
-        - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
-        - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
-        - [Failover and elections](#failover-and-elections)
-    - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
-        - [Write concern](#write-concern)
-        - [Read concerns](#read-concerns)
-        - [Read preference](#read-preference)
-    - [Sharding](#sharding)
-        - [When to shard](#when-to-shard)
-        - [Sharding Architecture](#sharding-architecture)
-        - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
-            - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
-            - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
-            - [Enable replica set to be a shard](#enable-replica-set-to-be-a-shard)
-            - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
-        - [Config database](#config-database)
-        - [Shard keys](#shard-keys)
-            - [How to shard](#how-to-shard)
-            - [Picking a good shard key](#picking-a-good-shard-key)
-            - [Hashed shard keys](#hashed-shard-keys)
-        - [Chunks](#chunks)
-        - [Balancing](#balancing)
-        - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
-        - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
-        - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
-    - [Indexes](#indexes)
-        - [What are indexes](#what-are-indexes)
-        - [Types of indexes](#types-of-indexes)
-            - [Single field indexes](#single-field-indexes)
-            - [Compound indexes](#compound-indexes)
-            - [Multi-key indexes](#multi-key-indexes)
-            - [Partial indexes](#partial-indexes)
-            - [Sparse indexes](#sparse-indexes)
-        - [Sorting with indexes](#sorting-with-indexes)
-        - [Index operations](#index-operations)
-        - [Query plans](#query-plans)
-        - [Explain plans](#explain-plans)
-        - [Resource allocation for indexes](#resource-allocation-for-indexes)
-    - [MongoDB Performance](#mongodb-performance)
-        - [How data is stored on disk](#how-data-is-stored-on-disk)
-            - [Physical files](#physical-files)
-            - [Journaling](#journaling)
-        - [Basic benchmarking](#basic-benchmarking)
-        - [Optimizing CRUD Operations](#optimizing-crud-operations)
-        - [Covered Queries](#covered-queries)
-        - [Insert performance](#insert-performance)
-        - [Different data type implications](#different-data-type-implications)
-        - [Performance consideration: Sharding](#performance-consideration-sharding)
-        - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
-        - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
-        - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
-    - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
-        - [The sizing process](#the-sizing-process)
-        - [Estimating IOPS](#estimating-iops)
-        - [Estimating data size](#estimating-data-size)
-        - [Estimating the working set](#estimating-the-working-set)
-        - [Estimating the CPU](#estimating-the-cpu)
-        - [Estimating the need for sharding](#estimating-the-need-for-sharding)
-    - [Advanced clustering](#advanced-clustering)
-        - [Balancer internals](#balancer-internals)
-        - [The config database](#the-config-database)
-        - [Upgrades on sharded clusters](#upgrades-on-sharded-clusters)
-        - [Mongos processes](#mongos-processes)
-        - [Chunk splitting overview](#chunk-splitting-overview)
-        - [Zone based sharding (previously tag based sharding)](#zone-based-sharding-previously-tag-based-sharding)
-        - [Hash based sharding](#hash-based-sharding)
-        - [Empty chunks](#empty-chunks)
-        - [Data imbalance scenario](#data-imbalance-scenario)
-        - [Removing a shard](#removing-a-shard)
-            - [How to query the size of the data inside a chunk - (mapping metadata to physical size!)](#how-to-query-the-size-of-the-data-inside-a-chunk---mapping-metadata-to-physical-size)
-    - [Tooling overview](#tooling-overview)
-        - [Server logs](#server-logs)
-        - [Mongo shell](#mongo-shell)
-        - [Profiler](#profiler)
-        - [Mongostat, mongotop, mongoreplay](#mongostat-mongotop-mongoreplay)
-        - [mtools package](#mtools-package)
+  - [Connection Details](#connection-details)
+  - [Data types](#data-types)
+  - [Use cases](#use-cases)
+    - [Navigating via command line](#navigating-via-command-line)
+    - [Finding the distinct values for a particular field in a collection](#finding-the-distinct-values-for-a-particular-field-in-a-collection)
+    - [Executing javascript on the host machine](#executing-javascript-on-the-host-machine)
+    - [Inserting one single document](#inserting-one-single-document)
+    - [Inserting multiple documents](#inserting-multiple-documents)
+    - [Reading documents](#reading-documents)
+    - [Projection on documents](#projection-on-documents)
+    - [Updating documents](#updating-documents)
+    - [Update many documents](#update-many-documents)
+    - [Upserts](#upserts)
+    - [Replace one](#replace-one)
+    - [Delete](#delete)
+    - [Advanced query operators](#advanced-query-operators)
+      - [Comparison operators](#comparison-operators)
+      - [Element operators](#element-operators)
+      - [Logical operators](#logical-operators)
+      - [Array operators](#array-operators)
+      - [Regex](#regex)
+  - [The MongoD](#the-mongod)
+    - [Starting the server](#starting-the-server)
+    - [Shutting down the server](#shutting-down-the-server)
+    - [Architecture](#architecture)
+    - [Data structures](#data-structures)
+    - [Configuration file](#configuration-file)
+    - [Creating users via command line](#creating-users-via-command-line)
+    - [Folder hierarchy](#folder-hierarchy)
+    - [Basic linux](#basic-linux)
+    - [Basic mongo shell commands](#basic-mongo-shell-commands)
+      - [Logging basics](#logging-basics)
+      - [Profiling the database](#profiling-the-database)
+    - [Collation](#collation)
+  - [Security](#security)
+    - [Introduction to security](#introduction-to-security)
+    - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
+    - [Terminology](#terminology)
+      - [Resources](#resources)
+      - [Privileges](#privileges)
+      - [Role inheritance](#role-inheritance)
+      - [Network Authentication Restrictions](#network-authentication-restrictions)
+    - [Built in roles](#built-in-roles)
+  - [Server Tools Overview](#server-tools-overview)
+    - [mongostat](#mongostat)
+    - [mongodump and mongorestore](#mongodump-and-mongorestore)
+    - [mongoexport and mongorestore](#mongoexport-and-mongorestore)
+  - [Replication](#replication)
+    - [Setting up a MongoDB replica set](#setting-up-a-mongodb-replica-set)
+      - [How to initiate a replica set](#how-to-initiate-a-replica-set)
+      - [How to add nodes to a replica set](#how-to-add-nodes-to-a-replica-set)
+      - [How to check the status of a replica set](#how-to-check-the-status-of-a-replica-set)
+    - [The Replication Configuration Document](#the-replication-configuration-document)
+    - [Replication commands](#replication-commands)
+    - [The oplog](#the-oplog)
+      - [Configuring the oplog](#configuring-the-oplog)
+      - [Querying the oplog](#querying-the-oplog)
+      - [One final thing about oplog and the local database](#one-final-thing-about-oplog-and-the-local-database)
+    - [Reconfiguring a running replica set](#reconfiguring-a-running-replica-set)
+    - [Reading and writing to a replica set](#reading-and-writing-to-a-replica-set)
+    - [Failover and elections](#failover-and-elections)
+  - [Write concerns, Read concerns and Read preferences](#write-concerns-read-concerns-and-read-preferences)
+    - [Write concern](#write-concern)
+    - [Read concerns](#read-concerns)
+    - [Read preference](#read-preference)
+  - [Sharding](#sharding)
+    - [When to shard](#when-to-shard)
+    - [Sharding Architecture](#sharding-architecture)
+    - [Setting up a sharded cluster](#setting-up-a-sharded-cluster)
+      - [Configuring the CSRS (Config Server Replica Set)](#configuring-the-csrs-config-server-replica-set)
+      - [Pointing mongos to the CSRS](#pointing-mongos-to-the-csrs)
+      - [Enable replica set to be a shard](#enable-replica-set-to-be-a-shard)
+      - [A rolling upgrade of the existing cluster](#a-rolling-upgrade-of-the-existing-cluster)
+    - [Config database](#config-database)
+    - [Shard keys](#shard-keys)
+      - [How to shard](#how-to-shard)
+      - [Picking a good shard key](#picking-a-good-shard-key)
+      - [Hashed shard keys](#hashed-shard-keys)
+    - [Chunks](#chunks)
+    - [Balancing](#balancing)
+    - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
+    - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
+    - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
+  - [Indexes](#indexes)
+    - [What are indexes](#what-are-indexes)
+    - [Types of indexes](#types-of-indexes)
+      - [Single field indexes](#single-field-indexes)
+      - [Compound indexes](#compound-indexes)
+      - [Multi-key indexes](#multi-key-indexes)
+      - [Partial indexes](#partial-indexes)
+      - [Sparse indexes](#sparse-indexes)
+    - [Sorting with indexes](#sorting-with-indexes)
+    - [Index operations](#index-operations)
+    - [Query plans](#query-plans)
+    - [Explain plans](#explain-plans)
+    - [Resource allocation for indexes](#resource-allocation-for-indexes)
+  - [MongoDB Performance](#mongodb-performance)
+    - [How data is stored on disk](#how-data-is-stored-on-disk)
+      - [Physical files](#physical-files)
+      - [Journaling](#journaling)
+    - [Basic benchmarking](#basic-benchmarking)
+    - [Optimizing CRUD Operations](#optimizing-crud-operations)
+    - [Covered Queries](#covered-queries)
+    - [Insert performance](#insert-performance)
+    - [Different data type implications](#different-data-type-implications)
+    - [Performance consideration: Sharding](#performance-consideration-sharding)
+    - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
+    - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
+    - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
+  - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
+    - [The sizing process](#the-sizing-process)
+    - [Estimating IOPS](#estimating-iops)
+    - [Estimating data size](#estimating-data-size)
+    - [Estimating the working set](#estimating-the-working-set)
+    - [Estimating the CPU](#estimating-the-cpu)
+    - [Estimating the need for sharding](#estimating-the-need-for-sharding)
+  - [Advanced clustering](#advanced-clustering)
+    - [Balancer internals](#balancer-internals)
+    - [The config database](#the-config-database)
+    - [Upgrades on sharded clusters](#upgrades-on-sharded-clusters)
+    - [Mongos processes](#mongos-processes)
+    - [Chunk splitting overview](#chunk-splitting-overview)
+    - [Zone based sharding (previously tag based sharding)](#zone-based-sharding-previously-tag-based-sharding)
+    - [Hash based sharding](#hash-based-sharding)
+    - [Empty chunks](#empty-chunks)
+    - [Data imbalance scenario](#data-imbalance-scenario)
+    - [Removing a shard](#removing-a-shard)
+    - [Query the size of the data inside a chunk - (mapping metadata to physical size!)](#query-the-size-of-the-data-inside-a-chunk---mapping-metadata-to-physical-size)
+  - [Tooling overview](#tooling-overview)
+    - [Server logs](#server-logs)
+    - [Mongo shell](#mongo-shell)
+    - [Profiler](#profiler)
+    - [Mongostat, mongotop, mongoreplay](#mongostat-mongotop-mongoreplay)
+    - [mtools package](#mtools-package)
+    - [Compass](#compass)
+  - [Slow queries and performance optimization](#slow-queries-and-performance-optimization)
+    - [Slow queries and performance](#slow-queries-and-performance)
+    - [Drop in throughput](#drop-in-throughput)
+    - [Application changes](#application-changes)
+    - [Using mtools to find slow queries](#using-mtools-to-find-slow-queries)
+    - [Fixing misses indexes](#fixing-misses-indexes)
+  - [Connectivity issues](#connectivity-issues)
+  - [Schema design](#schema-design)
+  - [Security Advanced](#security-advanced)
+    - [Authentication](#authentication)
+      - [Mechanisms](#mechanisms)
+      - [Localhost exception](#localhost-exception)
+      - [Authentication examples](#authentication-examples)
+      - [Authentication on a sharded cluster](#authentication-on-a-sharded-cluster)
+      - [Enabling SCRAM](#enabling-scram)
+      - [Enabling X.509 certificates](#enabling-x509-certificates)
+      - [Enabling LDAP](#enabling-ldap)
+      - [Enabling Kerberos](#enabling-kerberos)
+      - [Enabling internal authentication](#enabling-internal-authentication)
+        - [Internal auth: key-file based](#internal-auth-key-file-based)
+        - [Internal auth: x.509](#internal-auth-x509)
+      - [Upgrade from MongoDB-CR to SCRAM-SHA-1](#upgrade-from-mongodb-cr-to-scram-sha-1)
+  - [The authorization model](#the-authorization-model)
+    - [Built-in roles](#built-in-roles)
+    - [User defined rules](#user-defined-rules)
+    - [Adv Actions](#adv-actions)
+    - [Adv Resources](#adv-resources)
+    - [Adv Privileges](#adv-privileges)
+    - [Examples](#examples)
+    - [Grant new privileges to role](#grant-new-privileges-to-role)
+    - [Revoke privileges from role](#revoke-privileges-from-role)
+  - [Encryption](#encryption)
+    - [Transport encryption: TLS](#transport-encryption-tls)
+    - [Encryption at rest](#encryption-at-rest)
+      - [Homework](#homework)
+        - [Homework 2.1 : Create Users for Different Tasks](#homework-21--create-users-for-different-tasks)
+        - [Homework 2.2 : Create application specific users](#homework-22--create-application-specific-users)
+        - [Homework 2.3 : Create custom roles](#homework-23--create-custom-roles)
+        - [Homework 2.4 : Create replica with TLS enabled](#homework-24--create-replica-with-tls-enabled)
+  - [Auditing](#auditing)
+    - [Output format](#output-format)
+    - [How to enable auditing](#how-to-enable-auditing)
+    - [Definition of filters](#definition-of-filters)
+    - [Security checklist](#security-checklist)
+    - [Security reports](#security-reports)
+    - [Homework 3.1](#homework-31)
+    - [Homework 3.2](#homework-32)
+    - [Homework 3.3](#homework-33)
+    - [Discussion topics](#discussion-topics)
 
 <!-- /TOC -->
 
@@ -2441,7 +2491,7 @@ Caveats
 
 ### Hash based sharding
 
-Similar considerations to pre-splitting: High cardinality, Floating point numbers discouraged
+Similar considerations to pre-splitting: High cardinality and floating point numbers discouraged
 
     db.collection.ensureIndex({"\_id" : "hashed"})
     sh.shardCollection("db.collection", {"\_id" : "hashed"})
@@ -2513,7 +2563,7 @@ How?
 - move any databases that have that shard as their primary with movePrimary command
 - run the removeShard command again
 
-#### How to query the size of the data inside a chunk - (mapping metadata to physical size!)
+### Query the size of the data inside a chunk - (mapping metadata to physical size!)
 
 Query:
 
@@ -2598,11 +2648,9 @@ Server log components
 
 ### Mongo shell
 
-You can connect to the MongoDB server, particularly for administration but also for practicing MongoDB operations, and it's also a Javascript interpreter capable of running (javascript) scripts.
+You can connect to the MongoDB server, particularly for administration but also for practicing MongoDB operations, and it's also a Javascript interpreter capable of running (javascript) scripts. To show what the server is doing **right now**:
 
     db.currentOp()
-
-Shows what the server is doing **right now**.
 
 "Long-running operations" is the only answer to which one could give an unqualified yes. Connections that have been open for a long time may not be associated with any particular operation, so they won't show up in currentOps unless they are running an operation currently.
 
@@ -2709,7 +2757,7 @@ Overview of the important metrics of the database. A huge document containing
 
 ### Profiler
 
-> the profiler is a diagnostic tool, and you should expect it to routinely attenuate performance on a production system. Don't turn it on unless you're willing to accept that, and turn it off when you're done.
+The profiler is a diagnostic tool, and you should expect it to routinely attenuate performance on a production system. Don't turn it on unless you're willing to accept that, and turn it off when you're done.
 
     db.getProfilingLevel()
     db.setProfilingLevel()
@@ -2720,7 +2768,7 @@ Overview of the important metrics of the database. A huge document containing
 
 ### Mongostat, mongotop, mongoreplay
 
-to know, in real time, the number of queries / second occurring in a given replica set, mongostat has this functionality. mongoreplay can capture the queries, but doesn't let me know how many are coming in each second in real-time. mongotop looks at time spent in each namespace, but doesn't count queries. mongoperf only looks at simulating a disk I/O load, not at monitoring performance at all
+To know, in real time, the number of queries / second occurring in a given replica set, mongostat has this functionality. mongoreplay can capture the queries, but doesn't let me know how many are coming in each second in real-time. mongotop looks at time spent in each namespace, but doesn't count queries. mongoperf only looks at simulating a disk I/O load, not at monitoring performance at all
 
     # launch some servers
     mlaunch init --replicaset --name m312RS --wiredTigerCacheSizeGB 0.25 --oplogSize 100 --port 30000 --host localhost
@@ -2793,3 +2841,1166 @@ Useful commands
 
     # analyze using a graphical representation of the logs entries
     mlogvis /home/vagrant/data/replset/rs1/mongod.log -o /shared/visualization.html --no-browser
+
+### Compass
+
+All of the following are performance metrics available in MongoDB Compass:
+
+- Number of Operations (Insert, Queries, Updates, etc)
+- Number of Reads & Writes
+- Network Activity
+- Memory Usage
+
+Note: While Compass does report the number of "Reads & Writes," it is important to point out that this refers to operational reads & writes. Compass does not display disk reads and writes. An operational read translates into zero or more disk reads, while an operational write translates (usually) into at least 2 disk writes (can be more).
+
+## Slow queries and performance optimization
+
+### Slow queries and performance
+
+Three analysis points
+
+- Read response time
+- Write response time
+- End-to-end response time
+
+Several scenario's:
+
+- response time degradation (over time)
+- impactful long-running queries affecting overall performance
+
+Import the londonbikes dataset
+
+    mongorestore --drop --gzip --port 27001 -d londonbikes /shared/dump
+
+Import the friends dataset
+
+    mongoimport --port 27001 -d m312 -c friends /dataset/friends_10.json
+    mongoimport --port 27001 -d m312 -c friends /dataset/friends_1000.json
+    mongoimport --port 27001 -d m312 -c friends /dataset/friends_1000000.json
+
+All of these can improve an application's response time:
+
+- Having the correct set of indexes ensures that your queries are being answered efficiently.
+- Having enough RAM for your working set ensures that you're not touching the disk for most queries.
+- Optimizing the query results ensures that you're not fetching documents you don't require.
+- mongostat, mlogvis and profiler are here to help
+
+### Drop in throughput
+
+Why
+
+- Long-running queries
+  - collection scan
+  - poorly anchored regex
+  - inefficient index usage
+- index builds
+- write contention
+
+How analyse
+
+- server logs
+- db.currentOp()
+- turn on the profiler (if you can afford further slowdown)
+
+### Application changes
+
+What
+
+- Connection spikes
+  - Exhausting connection pools
+  - Incorrect connections to production environment
+  - Analytical workload and reporting tools
+
+How to fix
+
+- Keeping historical monitoring data
+  - predict the normal behavior of your application: with historical data, you should be able to predict what your application's behavior will look like, to the database, for normal behavior.
+  - compare your current application performance with benchmarked data: with historical data, you can compare current performance with historical benchmarks, a useful way of determining if your behavior is normal or not.
+- Watching out for spikes in connections
+- Watching out for spikes in ops/s
+- Spotting long lasting, non-indexing queries
+
+Atlas, Cloud Manager, Ops Manager offer dashboards and filtering on this data.
+
+### Using mtools to find slow queries
+
+Tools
+
+- mloginfo: quick summary of query shapes
+- mplotqueries: a plot to show all queries over time
+- mlogvis: similar to mplotqueries yet uses browser
+
+Useful commands
+
+    #Show summary
+    mloginfo file.log
+
+    #All (slow queries) sorted by  occurrence x impact
+    mloginfo --queries --no-progressbar
+
+    #show a GUI with the plotted queries time-over-latency
+    mplotqueries file.log
+
+    #outputs a HTML file
+    mplotqueries file.log
+
+### Fixing misses indexes
+
+Building an index options:
+
+- Build the index on the Primary from the shell
+- Build the index in the background on the Primary from the shell
+- Build the index with Compass
+- Build the index on each member of the replica set
+- Use Ops Manager or Cloud Manager to build the index
+  - This has managed indexes by default and performs a rolling upgrade
+
+Strategy
+
+- No production: building on primary, in foreground
+- Managed under ops or cloud manager, use tooling
+- Production and system with window of time, in background
+- Production with primary under stress, use manual rolling upgrade
+
+Foreground and background index creation:
+
+    db.people.createIndex({"ssn":1});  // build another index
+    db.people.createIndex({"ssn":1},{"background":true})
+
+Queries might be useful to detect impact of index creation on application: we look for the first occurrence of a planSummary that is not equals to COLLSCAN, we will find the a point where the query is already running, supported by an index.
+
+    db.profiler_data.find({planSummary:{$ne:"COLLSCAN"}}).sort({ts:1}).limit(1)
+
+This answers the first part of our problem, which index was created. If we know that after a certain point, our query become optimized, we need go back and see when was the last ts where the planSummary was still a COLLSCAN
+
+    db.profiler_data.find({"ts":{$lt:ISODate("2017-03-06T22:56:30.407Z")}}.sort({ts:-1})
+
+Or you can go hardcore and hypothesis driven
+
+    db.profiler_data.find({},{ns: 1, query: 1, millis: 1, ts: 1, _id: 0}).sort({millis : 1})
+    db.profiler_data.find({"op" : "query", "query.filter.birthdate" : {$exists : false}}, {"query.filter" : 1, _id : 0, ts :1, millis: 1}).sort({ ts : 1})
+
+## Connectivity issues
+
+Make sure all nodes in a replica set have network visibility from the application driver. And make sure the firewall is allowing connections not only between the nodes but between all nodes and the application drivers.
+
+set the max amount of connections
+
+    net:
+      port: 27000
+      maxIncomingConnections: 200
+
+mlaunch init a 3 node replica set
+
+    mlaunch init --name TIMEOUTS --replicaset --nodes 3 --dir timeouts --port 27000
+
+MongoDB allows by default 65536 connections to be set.
+
+    python make_lots_of_connections_to_servers.py --help
+
+    mongostat --port 27000 -o "command,dirty,used,vsize,res,conn,time"
+
+    python /shared/make_lots_of_connections_to_servers.py --port 27000 -n 100
+    python /shared/make_lots_of_connections_to_servers.py --port 27000 -n 200
+    python /shared/make_lots_of_connections_to_servers.py --port 27000 -n 600
+
+    watch -n 2 free -h
+
+    python /shared/make_lots_of_connections_to_servers.py --port 27000 -n 2000  # you'll run out of memory, most likely
+
+Check your system settings!
+
+    vagrant@m312:/data/db/test-configRS-0/diagnostic.data$ ulimit -a
+        core file size          (blocks, -c) 0
+        data seg size           (kbytes, -d) unlimited
+        scheduling priority             (-e) 0
+        file size               (blocks, -f) unlimited
+        pending signals                 (-i) 31547
+        max locked memory       (kbytes, -l) 64
+        max memory size         (kbytes, -m) unlimited
+        open files                      (-n) 1024
+        pipe size            (512 bytes, -p) 8
+        POSIX message queues     (bytes, -q) 819200
+        real-time priority              (-r) 0
+        stack size              (kbytes, -s) 8192
+        cpu time               (seconds, -t) unlimited
+        max user processes              (-u) 31547
+        virtual memory          (kbytes, -v) unlimited
+        file locks                      (-x) unlimited
+
+"open files": indexes, collections, lock file, log file... all account for this.
+
+timeouts (1ms, 3nodes, extremely likely to end up in timeout)
+
+    db.foo.insertOne( { hello: 'world' }, { writeConcern: { w: 3, wtimeout:1 } } );
+
+majority write concern
+
+> For a 7-member replica set with one arbiter and one delayed secondary, always 4 members are needed in order to acknowledge { w : "majority" } before the wtimeout is hit. The arbiter and the delayed secondary don't change that fact. The danger is that, if there's both an arbiter and a delayed secondary, there are only 5 other servers that are providing availability. If two data-bearing servers go down, your replica set will be able to elect a primary, but will not be able to acknowledge writes with { w : majority }.
+
+Different ways of connecting machines
+
+- IP addresses
+- FQDN
+- DNS resolve
+
+Networking best practices
+
+- All replica set nodes should be addressable from your client hosts and replica set hosts
+- All mongos's and replica set members are addressable by the client and application hosts
+- The application should use more than one replica set member in the connection string
+- All mongos nodes should be addressable
+- Use DNS names instead of IP addresses to avoid IP address renew resolution conflicts
+- Make use of ping command to check if nodes can reach each other and use telnet to make sure the ports are available (firewall)
+
+How to detect
+
+- Look for NETWORK type entries in the log file when starting, configuring the replica set.
+- We can **not** set any NIC or hostname for our replica set configuration set, hoping MongoDB will figure things out for us. MongoDB will use the hostnames given, which may seem to work fine until a part of the cluster (or the application) can no longer rely on its hostnames.
+
+Sharding network connectivity
+
+- One chunk can be in flight per pair of shards
+
+Great helper function in the shell to look at shard distribution
+
+    db.example.getShardDistribution()
+
+More documentation on sharding performance:
+
+- [Modify chunk size](https://docs.mongodb.com/manual/tutorial/modify-chunk-size-in-sharded-cluster/)
+- [Shard Key cardinality](https://docs.mongodb.com/manual/core/sharding-shard-key/#shard-key-cardinality)
+- [Documentation on the Balancer / Chunk Migrations](https://docs.mongodb.com/manual/core/sharding-balancer-administration/)
+- [Jumbo Chunks](https://docs.mongodb.com/manual/core/sharding-data-partitioning/#jumbo-chunks)
+- [Indivisible chunks](https://docs.mongodb.com/manual/core/sharding-data-partitioning/#indivisible-chunks)
+- [Splitting chunks](https://docs.mongodb.com/manual/tutorial/split-chunks-in-sharded-cluster/)
+- [Modify chunk size](https://docs.mongodb.com/manual/tutorial/modify-chunk-size-in-sharded-cluster/)
+
+## Schema design
+
+The structure of your data impacts system performance. Two typical bad performance impacts:
+
+1. Over normalization: one user interaction triggers an enormous amount of queries
+1. Under normalization: storing rarely used data with frequently accessed data
+
+## Security Advanced
+
+We are going to cover the following topics:
+
+- Authentication
+- Authorization
+- Auditing
+- Encryption
+- Best Practices
+
+### Authentication
+
+_Authentication_ verifies the identity of the user: how we know who a user is on a system.  
+_Authorization_ verifies the privileges of the user: how we know what a user can do on a system.
+
+#### Mechanisms
+
+Authentication mechanism need to protect against:
+
+- eavesdropping: client never sends password as plain text over the network
+- replay: each interaction has its own nonce
+- database compromise: iteratively hashing the password before storing it
+- malicious server: server cannot pose as a server without valid credentials
+
+Client-User authentication:
+
+| Type               | Name        | Desc                                                                                 |
+| ------------------ | ----------- | ------------------------------------------------------------------------------------ |
+| challenge-response | SCRAM-SHA-1 | default, challenge/response, username/password mechanism. IETF standard.             |
+| challenge-response | MongoDB-CR  | deprecated. challenge/response, username/password mechanism. Replaced by SCRAM-SHA-1 |
+| certificate        | X.509       | uses TLS                                                                             |
+| external           | LDAP        | lightweight directory access protocol supported in MongoDB enterprise                |
+| external           | Kerberos    | Industry standard, designed for secure authentication.                               |
+
+Internal auth: Members of a replica set or sharded, cluster must prove who they are. Especially advised in publicly accessible or hosted nodes.
+
+| Type        | Name        | Desc                                                               |
+| ----------- | ----------- | ------------------------------------------------------------------ |
+| Keyfile     | SCRAM-SHA-1 | shared password                                                    |
+| certificate | X.509       | certificate based, recommended to issue different certs per member |
+
+#### Localhost exception
+
+The localhost exception:
+
+- is only applicable when connected to MongoDB via the localhost network interface.
+- only allows you to create one user. After the first user is created any other attempt to create a user (even on another database) will fail.
+- only allows you to create a user. Any other command that requires authorization will fail.
+- still applies to members of a sharded cluster (or a replica set).
+
+#### Authentication examples
+
+You are allowed to connect to a server that has authorization enabled without authenticating first. A user needs to be authenticated against the database it was created on.
+
+Commands
+
+    mongo admin -u kirby -p password
+
+    mongo -u kirby -p password --authenticationDatabase=admin
+
+    mongo
+    use admin
+    db.auth('kirby', 'password')
+
+    # spin up a sharded cluster with authentication enabled (key files)
+    mlaunch init --sharded 3 --replicaset --nodes 3 --config 3 --auth
+
+    # mlaunch protects with db.auth('user','password')
+
+#### Authentication on a sharded cluster
+
+Authentication on a sharded cluster is enabled by enabling internal authentication. It doesn't matter if you use keyfile or X.509 certificates.
+
+Authentication on a sharded cluster is not achieved by passing a --auth option to each mongod as this would enable client authentication on each mongod, which would not enable authentication on communication via the mongos.
+
+> On a sharded cluster the localhost exception still applies. To disable this use the mongod --setParameter enableLocalhostAuthBypass=false
+
+#### Enabling SCRAM
+
+Commands
+
+    mongod --auth
+
+    #localhost exception
+    mongo
+    use admin
+    db.createUser({user : 'kirby', pwd : 'password', roles : ['root']})
+
+    #close the shell or auth directly
+    db.auth('kirby', 'password')
+
+    vim config
+    security:
+      authorization: 'enabled'
+
+    mongod --config config
+
+#### Enabling X.509 certificates
+
+Assuming a MongoDB build with TLS enabled. The .pem files are a great way to get started as they contain both the private key and the public certificate in one file. The X.509 authentication mechanism works as follows:
+
+- It obtains a certificate from the client when the TLS connection is established.
+- The certificate must be signed by the certificate authority file passed to the mongod.
+- The subject of the certificate must match the name of the user in the $external database.
+
+Commands
+
+    mongod --sslMode requireSSL --sslPEMKeyFile server.pem --sslCAFile ca.pem --auth
+
+    openssl x509 -in client.pem -inform PEM -subject -nameopt RFC2253 -noout
+    # store the output value of subject=
+
+    mongo --ssl --sslPEMKeyFile client.pem --sslCAFile ca.pem
+
+    #use the localhost exception
+    db.getSiblingDB("$external").runCommand({createUser: "C=US...<value from openssl>", roles: [{role: 'root', db : 'admin'}])
+
+    #close the shell or auth directly
+    db.getSiblingDB("$external").auth({user: "C=US...<value from openssl>", mechanism: "MONGODB-X509"})
+
+#### Enabling LDAP
+
+LDAP Authentication support is a MongoDB Enterprise only feature. MongoDB drivers authenticating to MongoDB with LDAP send LDAP credentials using SASL PLAIN which sends the username/password in clear text. saslauthd is a proxy service used by mongod to talk to a LDAP server. Make sure to run this inside a private network over secured channels (TLS).
+
+    sudo apt-get install sasl2-bin
+    sudo vim /etc/default/saslauthd
+        START = YES
+        MECHANISMS = LDAP
+
+    sudo vim /etc/saslauthd.conf
+        ldap_servers: ldap://localhost:389
+        ldap_search_base: dc=mongodb,dc=com
+        ldap_filter: (uid=%u)
+
+    start the service
+    sudo service saslauthd start
+
+    sudo ls /var/run/saslauthd
+    sudo chmod 755 /var/run/saslauthd
+
+    testsaslauthd -u kirby -p ldap -f /var/run/saslauthd/mux
+
+    mongod --auth --setParameter authenticationMechanisms=PLAIN --setParameter saslauthdPath="/var/run/saslauthd/mux" --dbpath /data/db --logpath /data/db/mongo.log --fork
+
+Add the user to the external database. Remember the password is stored in LDAP.
+
+    db.getSiblingDB("$external").createUser({user:'kirby', roles: [{role: 'root', db : 'admin'}]})
+
+#### Enabling Kerberos
+
+Kerberos and MongoDB have mutual trust through a shared key. Kerberos principals are case-sensitive. MongoDB uses the GSSAPI authentication mechanism for Kerberos authentication. Kerberos Authentication support is a MongoDB Enterprise only feature.
+
+A kerberos principal is a unique identity to which Kerberos can assign tickets. ~ users.
+
+    sudo kadmin.local
+    listprincs
+
+    addprinc -randkey mongodb/database.m310.university.mongodb.com
+        mongodb: service name
+        database... : host name of service running db
+
+    ktadd -k mongodb.keytab mongodb/database.m310.university.mongodb.com
+
+copy the generated keytab to the server
+
+    export KRB5_KTNAME=pwd/mongodb.keytab
+
+    sudo vim /etc/krb5.conf
+        libdefaults>default_realm=MONGODB.COM
+        realms>MONGODB.COM
+            kdc = hostname of kdc
+            admin server = same as kdc
+        domain_realm>.mongodb.com = MONGODB.COM
+            mongodb.com = MONGODB.COM
+
+    mongod --auth --setParameter authenticationMechanisms=GSSAPI --dbpath /data/db --logpath /data/db/mongo.log --fork
+
+     db.getSiblingDB("$external").createUser({user:'kirby@MONGODB.COM', roles: [{role: 'root', db : 'admin'}]})
+
+First authenticate to Kerberos
+
+    kinit kirby
+
+    db.auth( { mechanism : "GSSAPI", user : "kirby@MONGODB.COM"})
+
+#### Enabling internal authentication
+
+The following security mechanisms are supported by internal authentication with MongoDB:
+
+- X.509
+- Keyfile
+
+##### Internal auth: key-file based
+
+SCRAM-SHA-1 challenge, response, key files act as shared password between the members.
+
+    openssl rand -base64 755 > mongodb-keyfile
+    chmod 400 mongodb-keyfile
+    mkdir -p rs1/db rs2/db rs3/db
+
+    mongod --replSet MyReplSet ... --keyFile ./mongodb-keyfile
+    mongod --replSet MyReplSet ... --keyFile ./mongodb-keyfile
+
+    mongo
+    rs.initiate()
+    #unable to add new nodes without the shared secret
+
+    rs.status()
+
+##### Internal auth: x.509
+
+Required files:
+
+- ca.pem: certificate authority
+- client.pem: keyfile for client
+- member1,2,3.pem: certificates for each member of the replica set
+
+Set-up commands:
+
+    mkdir -p rs1/db rs2/db rs3/db
+
+    mongod --replSet MyReplSet ... --sslMode requireSSL --clusterAuthMode x509 --sslPEMKeyFile member1.pem --sslCAFile ca.pem
+
+    mongod --replSet MyReplSet ... --sslMode requireSSL --clusterAuthMode x509 --sslPEMKeyFile member2.pem --sslCAFile ca.pem
+
+Replace with a config file for ease of use:
+
+    config.yaml
+        security
+            clusterAuthMode x509
+        net
+            ssl
+                mode requireSSL
+                CAFile ca.pem
+                clusterFile member1.pem
+
+    mongod --config config.yaml
+
+#### Upgrade from MongoDB-CR to SCRAM-SHA-1
+
+As of MongoDB 3.0 MongoDB-CR is deprecated in favor of SCRAM-SHA-1.
+
+- Updating drivers might be required.
+- MONGODB-CR will be disabled after the migration.
+- SCRAM-SHA-1 is more secure that MONGODB-CR.
+- On 3.0 before importing 2.6 user data new users are created with SCRAM-SHA-1.
+
+Changing authentication mechanisms from MONGODB-CR to SCRAM-SHA-1:
+
+    db.adminCommand({authSchemaUpgrade: 1})
+
+homework 1
+
+    mongod --port 31130 --dbpath ~/M310-HW-1.3/r0 --logpath ~/M310-HW-1.3/r0/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml --fork
+
+    mongod --port 31131 --dbpath ~/M310-HW-1.3/r1 --logpath ~/M310-HW-1.3/r1/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml  --fork
+
+    mongod --port 31132 --dbpath ~/M310-HW-1.3/r2 --logpath ~/M310-HW-1.3/r2/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml  --fork
+
+    mongo database.m310.mongodb.university:31130 --ssl --sslPEMKeyFile /home/vagrant/shared/certs/client.pem --sslCAFile /home/vagrant/shared/certs/ca.pem
+
+    rs.initiate({
+        \_id: "MyReplSet",
+        version: 1,
+        members: [
+            { _id: 0, host : "database.m310.mongodb.university:31130" },
+            { _id: 1, host : "database.m310.mongodb.university:31131" },
+            { _id: 2, host : "database.m310.mongodb.university:31132" }
+        ]
+    })
+
+    db.getSiblingDB("$external").runCommand({createUser: "C=US,ST=New York,L=New York City,O=MongoDB,OU=University2,CN=M310 Client", roles: [{role: 'root', db : 'admin'}])
+
+homework 2
+
+    mongod --port 31150 --dbpath ~/M310-HW-1.5/r0 --logpath ~/M310-HW-1.5/r0/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml --fork
+
+    mongod --port 31151 --dbpath ~/M310-HW-1.5/r1 --logpath ~/M310-HW-1.5/r1/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml --fork
+
+    mongod --port 31152 --dbpath ~/M310-HW-1.5/r2 --logpath ~/M310-HW-1.5/r2/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml --fork
+
+    mongo database.m310.mongodb.university:31150 --ssl --sslPEMKeyFile /home/vagrant/shared/certs/client.pem --sslCAFile /home/vagrant/shared/certs/ca.pem
+
+    rs.initiate({
+        _id: "MyReplSet",
+        version: 1,
+        members: [
+            { _id: 0, host : "database.m310.mongodb.university:31150" },
+            { _id: 1, host : "database.m310.mongodb.university:31151" },
+            { _id: 2, host : "database.m310.mongodb.university:31152" }
+        ]
+    })
+
+
+    db.createUser({user : 'will', pwd : '$uperAdmin', roles : ['root']})
+    db.getSiblingDB("$external").runCommand({createUser: "C=US,ST=New York,L=New York City,O=MongoDB,OU=University2,CN=M310 Client", roles: [{role: 'userAdminAnyDatabase', db : 'admin'}]})
+
+
+    mongod --port 31152 --dbpath ~/M310-HW-1.5/r2 --logpath ~/M310-HW-1.5/r2/mongodb.log --replSet MyReplSet --sslMode requireSSL --config x509.yaml --fork
+
+    mongod --replSet MyReplSet --port 31160 --dbpath ~/M310-HW-1.6/r0 --logpath ~/M310-HW-1.6/r0/mongodb.log --auth --setParameter authenticationMechanisms=PLAIN --setParameter saslauthdPath="/var/run/saslauthd/mux" --fork --keyFile /home/vagrant/M310-HW-1.6/mongodb-keyfile
+
+    mongod --replSet MyReplSet --port 31161 --dbpath ~/M310-HW-1.6/r1 --logpath ~/M310-HW-1.6/r1/mongodb.log --auth --setParameter authenticationMechanisms=PLAIN --setParameter saslauthdPath="/var/run/saslauthd/mux" --fork --keyFile /home/vagrant/M310-HW-1.6/mongodb-keyfile
+
+    mongod --replSet MyReplSet --port 31162 --dbpath ~/M310-HW-1.6/r2 --logpath ~/M310-HW-1.6/r2/mongodb.log --auth --setParameter authenticationMechanisms=PLAIN --setParameter saslauthdPath="/var/run/saslauthd/mux" --fork --keyFile /home/vagrant/M310-HW-1.6/mongodb-keyfile
+
+    rs.initiate({
+        \_id: "MyReplSet",
+        version: 1,
+        members: [
+            { _id: 0, host : "database.m310.mongodb.university:31160" },
+            { _id: 1, host : "database.m310.mongodb.university:31161" },
+            { _id: 2, host : "database.m310.mongodb.university:31162" }
+        ]
+    })
+
+    db.getSiblingDB("$external").createUser({user:'adam', roles: [{role: 'root', db : 'admin'}]})
+
+    db.getSiblingDB("$external").auth({mechanism: "PLAIN", user: "adam", pwd: "password", digestPassword: false})
+
+## The authorization model
+
+MongoDB's authorization model is role-based access control.
+
+> Roles are groups of privileges, actions over resources, that are granted to users over a given namespace (database).
+
+What are privileges, actions and resources:
+
+- Privilege: an action on a resource
+- Actions: operations and commands (insert, update)
+- Resources: objects that hold stats (collections, database, cluster)
+
+Why role-based access control:
+
+- To provide administrators a high level of responsibility isolation for users' operational tasks
+- So applications can act within tightly defined, tailored roles in MongoDB that match the needs of their end-users
+- Because it allows users to grant specific actions over specific resources
+- Because it is a widely used authorization model
+
+The following are properties of MongoDB's authorization model:
+
+- Role Inheritance
+- Actions on resources define privileges
+- Roles are granted to users with a per-database granularity
+
+### Built-in roles
+
+Role inheritance
+
+- Database user
+  - read
+  - readWrite
+- Database admin
+  - dbAdmin
+  - userAdmin
+  - dbOwner
+- All database
+  - readAnyDatabase
+  - readWriteAnyDatabase
+  - userAdminAnyDatabase
+  - dbAdminAnyDatabase
+- Cluster Admin
+  - clusterManager
+  - clusterMonitor
+  - hostManager
+  - clusterAdmin
+- Backup/Restore
+  - backup
+  - restore
+- Superuser: allows to assign any role to itself...
+  - dbOwner (admin)
+  - userAdmin (admin)
+  - userAdminAnyDatabase
+  - root
+- Internal
+  - \_\_system - any action, any resource, internal only...
+
+### User defined rules
+
+The built-in roles should cover 99% of use cases.
+
+To create cross-database or cross-cluster roles, create them on the admin database.
+
+- Unique role: role name + database
+- Inherited roles
+- Privileges (array of Action+Resource)
+
+How to create a user defined role:
+
+    db.createRole(
+        {
+            role : 'role-name',
+            privileges: [
+                {
+                    resource: {
+                        db : 'database',
+                        collection: 'collection'
+                    },
+                    actions: [
+                        'action'
+                    ]
+                }
+            ],
+            roles: [
+                {
+                    role: 'role',
+                    db: 'database'
+                }
+            ]
+        }
+    )
+
+### Adv Actions
+
+Actions are "verbs" that are executed against a certain resource (or "subject").
+
+- Query & Write
+- Database management
+- Deployment management
+- Replication
+- Sharding
+- Server administration
+- Diagnostic
+- Internal
+
+### Adv Resources
+
+The subjects of the actions.
+
+- database
+  - { db : "products", collection : "" } -> all collections in a database
+- collection
+  - { db : "", collection : "collectionname" } -> all collections in any database
+  - { db : "products", collection : "collectionname" }
+  - { db : "", collection : "" } -> any collection in any database, non-system
+- cluster
+  - { cluster : true }
+- anyResource
+  - { anyResource : true }
+
+### Adv Privileges
+
+A privilege document:
+
+    {
+        resource: {
+            db : <database>,
+            collection: <collection>
+        },
+        actions: [
+            <action>
+        ]
+    }
+
+From the shell:
+
+    db.getRole("read")
+    var role = db.getRole("read", { showPrivileges : true})
+    role.privileges.length
+    role.privileges[0]
+
+### Examples
+
+Alice : security officer
+
+    db.createUser({user : 'alice', pwd : 'password', roles : [{role: 'userAdminAnyDatabase', db : 'admin'}]})
+
+Ben: sys admin
+
+    db.createUser({user : 'ben', pwd : 'password', roles : [{role: 'clusterManager', db : 'admin'}]})
+
+Carol: DBA
+
+    db.createUser({user : 'carol', pwd : 'password', roles : [{role: 'dbAdmin', db : 'admin'}]})
+    # only db on the admin database...
+    # overrides all previous roles
+    db.updateUser('carol', roles : [{role: 'dbAdminAnyDatabase', db : 'admin'}]})
+
+Intern: custom role
+
+    db.createRole(
+        {
+            role : 'internRole',
+            privileges: [
+                {
+                    resource: {
+                        db : 'nasa',
+                        collection: 'meteorites'
+                    },
+                    actions: [
+                        'update'
+                    ]
+                }
+            ],
+            roles: [
+                {
+                    role: 'read',
+                    db: 'nasa'
+                }
+            ]
+        }
+    )
+
+    # overrides all previous roles
+    db.updateUser('intern', roles : [{role: 'internRole', db : 'admin'}]})
+
+### Grant new privileges to role
+
+The developer style
+
+    var role = db.getRole("internRole", {showPrivileges : true})
+    var updatedPrivileges = role.privileges
+    updatedPrivileges[0].actions.push("insert")
+    db.updateRole("internRole", {privileges: updatedPrivileges})
+
+The operator style
+
+    db.grantPrivilegesToRole("internRole", [{resource : { db : 'nasa', collection: 'meteorites'}, actions: ['insert']}])
+
+The inheritance style
+
+    db.grantRolesToRole('internRole', ['readWriteAnyDatabase'])
+
+### Revoke privileges from role
+
+Revoking privileges:
+
+    db.revokePrivilegesToRole("internRole", [{resource : { db : '', collection: 'internlog'}, actions: ['update']}])
+
+## Encryption
+
+The following encryption methods are supported by MongoDB:
+
+- Transport encryption: TLS connection encryption, encrypting information over the network
+- Encryption at rest: encrypting the data stored at disk
+  - storage level
+  - application level
+
+### Transport encryption: TLS
+
+TLS encryption works through the use of...
+
+- Public/Private key encryption
+- SSL certificates
+
+All of the following are valid TLS connection modes:
+
+- disabled: no TLS/SSL supported at all
+- allowSSL: TLS/SSL supported
+- preferSSL: connections between members have to use TLS, incoming connections supported
+- requireSSL: connections between members, incoming connection have to use TLS
+
+Enabling TLS
+
+    # encrypt
+    mongod --sslMode requireSSL --sslPEMKeyFile server.pem
+
+    # encrypt + verify the identity of the client
+    mongod --sslMode requireSSL --sslPEMKeyFile server.pem --sslCAFile ca.pem
+
+Enabling TLS within a replica set
+
+    mongod --sslMode requireSSL --sslPEMKeyFile server.pem --sslCAFile ca.pem --replSet myEncryptedSet --port 31162 --dbpath ~/r0 --logpath ~/r0/mongodb.log
+
+    mongo --ssl --sslPEMKeyFile client.pem --sslCAFile ca.pem
+
+Mixed TLS/SSL within replica set: preferSSL vs requireSSL
+
+    mongod --sslMode preferSSL --sslPEMKeyFile server.pem --sslCAFile ca.pem --replSet myEncryptedSet --port 31162 --dbpath ~/r0 --logpath ~/r0/mongodb.log
+
+    mongo
+
+> The preferSSL argument can be passed to the --sslMode option to require TLS connections between the members of a replica set, but not require them for connections via clients.
+
+### Encryption at rest
+
+Storage level and application level encryption.
+
+> when using encryption at the application level it prevents one from querying or creating indices over encrypted data.
+
+Storage level encryption:
+
+- MongoDB's encrypted storage engine is only supported by MongoDB Enterprise and by the WiredTiger storage engine
+- An encryption key is generated for each database
+- The master key is stored outside of MongoDB either in a keyfile or via a KMIP solution.
+
+Enabling encryption at rest:
+
+    openssl rand -base64 32 > mongodb-keyfile
+    chmod 600 mongodb-keyfile
+    mongod --enableEncryption --encryptionKeyFile mongodb-keyfile
+
+KMIP integration
+
+    mongod --enableEncryption --kmipServerName localhost --kmipServerCAFile ca.pem --kmipClientCertificateFile client.pem
+
+#### Homework
+
+##### Homework 2.1 : Create Users for Different Tasks
+
+    mongod --replSet MyReplSet --port 31210 --dbpath r0 --logpath r0/mongodb.log --auth --fork --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31211 --dbpath r1 --logpath r1/mongodb.log --auth --fork --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31212 --dbpath r2 --logpath r2/mongodb.log --auth --fork --keyFile mongodb-keyfile
+
+    rs.initiate()
+    use admin
+    db.createUser({user : 'userAdmin', pwd : 'badges', roles : [{role: 'userAdminAnyDatabase', db : 'admin'}]})
+    db.auth("userAdmin", "badges")
+    db.createUser({user : 'sysAdmin', pwd : 'cables', roles : [{role: 'clusterManager', db : 'admin'}]})
+    db.auth("sysAdmin", "cables")
+    rs.add("database:31211")
+    rs.add("database:31212")
+    db.auth("userAdmin", "badges")
+    db.createUser({user : 'dbAdmin', pwd : 'collections', roles : [{role: 'dbAdminAnyDatabase', db : 'admin'}]})
+    db.createUser({user : 'dataLoader', pwd : 'dumpin', roles : [{role: 'readWriteAnyDatabase', db : 'admin'}]})
+
+##### Homework 2.2 : Create application specific users
+
+    mongod --replSet MyReplSet --port 31220 --dbpath r0 --logpath r0/mongodb.log --auth --fork --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31221 --dbpath r1 --logpath r1/mongodb.log --auth --fork --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31222 --dbpath r2 --logpath r2/mongodb.log --auth --fork --keyFile mongodb-keyfile
+
+    rs.initiate()
+    use admin
+    db.createUser({user : 'admin', pwd : 'webscale', roles : [{role: 'root', db : 'admin'}]})
+    db.createUser({user : 'reader', pwd : 'books', roles : [{role: 'read', db : 'acme'}]})
+    db.createUser({user : 'writer', pwd : 'typewriter', roles : [{role: 'readWrite', db : 'acme'}]})
+
+##### Homework 2.3 : Create custom roles
+
+    use admin
+    db.createUser({user : 'admin', pwd : 'webscale', roles : [{role: 'root', db : 'admin'}]})
+
+    db.createRole(
+    {
+        role : 'HRDEPARTMENT',
+        privileges: [
+            {
+                resource: {
+                    db : 'HR',
+                    collection: ''
+                },
+                actions: [
+                    'find'
+                ]
+            },{
+                resource: {
+                    db : 'HR',
+                    collection: 'employees'
+                },
+                actions: [
+                    'insert'
+                ]
+            },{
+                resource: {
+                    db : 'HR',
+                    collection: ''
+                },
+                actions: [
+                    'dropUser'
+                ]
+            },
+        ],
+        roles: [
+        ]
+    })
+
+    db.createRole(
+    {
+        role : 'MANAGEMENT',
+        privileges: [
+            {
+                resource: {
+                    db : 'HR',
+                    collection: ''
+                },
+                actions: [
+                    'insert'
+                ]
+            }
+        ],
+        roles: [
+            {
+                role: 'dbOwner',
+                db: 'HR'
+            }
+        ]
+    })
+
+    db.createRole(
+    {
+        role : 'EMPLOYEEPORTAL',
+        privileges: [
+            {
+                resource: {
+                    db : 'HR',
+                    collection: 'employees'
+                },
+                actions: [
+                    'find', 'update'
+                ]
+            }
+        ],
+        roles: [
+        ]
+    })
+
+##### Homework 2.4 : Create replica with TLS enabled
+
+    mongod --replSet MyReplSet --port 31240 --dbpath r0 --logpath r0/mongodb.log --auth --fork --sslMode requireSSL --sslPEMKeyFile /home/vagrant/shared/certs/server.pem --sslCAFile /home/vagrant/shared/certs/ca.pem --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31241 --dbpath r1 --logpath r1/mongodb.log --auth --fork --sslMode requireSSL --sslPEMKeyFile /home/vagrant/shared/certs/server.pem --sslCAFile /home/vagrant/shared/certs/ca.pem --keyFile mongodb-keyfile
+    mongod --replSet MyReplSet --port 31242 --dbpath r2 --logpath r2/mongodb.log --auth --fork --sslMode requireSSL --sslPEMKeyFile /home/vagrant/shared/certs/server.pem --sslCAFile /home/vagrant/shared/certs/ca.pem --keyFile mongodb-keyfile
+
+
+    mongo localhost:31240 --ssl --sslPEMKeyFile /home/vagrant/shared/certs/client.pem --sslCAFile /home/vagrant/shared/certs/ca.pem
+    use admin
+
+    rs.initiate(
+    {
+        _id: "MyReplSet",
+        version: 1,
+        members: [
+            { _id: 0, host : "localhost:31240" },
+            { _id: 1, host : "localhost:31241" },
+            { _id: 2, host : "localhost:31242" }
+        ]
+    }
+        )
+
+    mongod --dbpath /home/vagrant/M310-HW-2.5/r1 --logpath /home/vagrant/M310-HW-2.5/r1/mongo.log.log --port 31251 --replSet UNENCRYPTED --fork --enableEncryption --encryptionKeyFile /home/vagrant/M310-HW-2.5/mongodb-keyfile
+
+    mongod --dbpath /home/vagrant/M310-HW-2.5/r2 --logpath /home/vagrant/M310-HW-2.5/r2/mongo.log.log --port 31252 --replSet UNENCRYPTED --fork --enableEncryption --encryptionKeyFile /home/vagrant/M310-HW-2.5/mongodb-keyfile
+
+    mongod --dbpath /home/vagrant/M310-HW-2.5/r0 --logpath /home/vagrant/M310-HW-2.5/r0/mongo.log.log --port 31250 --replSet UNENCRYPTED --fork --enableEncryption --encryptionKeyFile /home/vagrant/M310-HW-2.5/mongodb-keyfile
+
+    mongod --dbpath /home/vagrant/M310-HW-2.6/r0 --logpath /home/vagrant/M310-HW-2.6/r0/mongo.log.log --port 31260 --enableEncryption --kmipServerName infrastructure.m310.mongodb.university --kmipServerCAFile /home/vagrant/shared/certs/ca.pem --kmipClientCertificateFile /home/vagrant/shared/certs/client.pem --fork
+
+## Auditing
+
+All of the following are common reasons organizations enable auditing on MongoDB:
+
+- Accountability
+- To investigate suspicious activity
+- To monitor specific database activities
+
+> Enabling auditing on MongoDB will decrease database performance.
+
+### Output format
+
+Each audit record is a JSON document:
+
+    {
+        atype: <String>,
+        ts : { "$date": <timestamp> },
+        local: { ip: <String>, port: <int> },
+        remote: { ip: <String>, port: <int> },
+        users : [ { user: <String>, db: <String> }, ... ],
+        roles: [ { role: <String>, db: <String> }, ... ],
+        param: <document>,
+        result: <int>
+    }
+
+Field description:
+
+- atype: action type (authenticate, create index, add user...)
+- ts: timestamp
+- local: local IP address and port number of the MDB instance
+- remote: remote IP address and port number of incoming connection
+- users: array of user identification
+- roles: array of roles granted to the user
+- param: details of the event associated to the atype. e.g. user-db-mechanism in case of authenticate atype
+- result: error associated with the event
+
+### How to enable auditing
+
+Command:
+
+    mongod --auditDestination syslog --dbpath /data/db --logpath /data/db/mongo.log --fork
+
+    mongod --auditDestination console --dbpath /data/db --logpath /data/db/mongo.log --fork
+
+    mongod --auditDestination file --dbpath /data/db --logpath /data/db/mongo.log --fork --auditFormat JSON --auditPath /data/db/auditLog.json
+
+        BSON as auditFormat has less performance impact yet less readability
+
+Can also be specified in config.yaml
+
+    systemLog:
+      destination: file
+      path: /data/db/mongo.log
+    storage:
+      dbPath: /data/db
+    auditLog:
+      destination: file
+      format: JSON
+      path: /data/db/auditLog.json
+
+### Definition of filters
+
+What is logged by default:
+
+- Schema (DDL)
+- Replica set and sharded cluster
+- Authentication and Authorization
+
+CRUD Operations (DML) are not audited by default by MongoDB. This is because there is a significant performance loss when CRUD is audited.
+
+Why audit filters:
+
+- Too many logs
+- Performance loss
+
+A filter document, essentially a query filter:
+
+    { atype: { "$in" : [ "createCollection", "dropCollection" ] } }
+
+Enabling the DDL filter:
+
+    auditLog:
+      destination: file
+      format: JSON
+      path: /data/db/auditLog.json
+      filter: '{ atype: { "$in" : [ "createCollection", "dropCollection" ] } }'
+
+Example of DDL audit filter. A regex is used to support all collections in the namespace of the database.
+
+    filter: '{
+        "atype": "createIndex",
+        "param" : {
+            "ns": /^my-application\./
+        }
+     } }'
+
+Enabling the DML filter:
+
+    auditLog:
+      destination: file
+      format: JSON
+      path: /data/db/auditLog.json
+    setParameter: { auditAuthorizationSuccess : true }
+
+The authCheck action type is used by CRUD operation events in MongoDB.
+
+### Security checklist
+
+The checklist:
+
+- Enable Access Control and Enforce Authentication
+  - SCRAM-SHA-1, X.509 certificates
+  - require authentication for all clients (mongod --auth)
+  - enable authentication on each mongodb server
+- Configure RBAC
+  - unique users for each person and application that access the database
+  - follow the principle of least privilege
+  - group common access privileges into roles
+- Encrypt communication
+  - transport encryption (--sslMode requireSSL)
+- Encrypt and protect data
+  - encryption at rest (mongod --enableEncryption)
+  - sign and rotate encryption keys (use KMIP solution)
+  - protect using file-system permissions (chmod 700 /data/db)
+- Limit network exposure
+  - config firewalls to control access to mongodb systems
+  - use VPN/VPC's can provide secure tunnel
+  - use bind_ip
+- Audit System activity
+  - track changes to database configuration
+  - track changes to data (with performance overhead)
+- Run MongoDB with a dedicated user
+  - should not run as root
+- Run mongoDB with secure configuration options
+  - disable HTTP status interface
+  - disable rest api
+  - disable server side scripting (--noscripting)
+- Request a security technical implementation guide (STIG)
+  - Please [request a copy](https://www.mongodb.com/lp/contact/stig-requests) for more information
+- Consider security standards compliance
+  - PCI DSS, HIPAA, NIST... For applications requiring compliance, please refer to the [MongoDB Security Reference Architecture](https://www.mongodb.com/collateral/mongodb-security-architecture) to learn more about how you can use the key security capabilities to build compliant application infrastructure.
+
+### Security reports
+
+Vulnerability reporting: submit a ticket on JIRA or send an email to security@mongodb.com
+
+### Homework 3.1
+
+    mongod --replSet MyReplSet --port 31310 --dbpath ~/M310-HW-3.1/r0 --logpath ~/M310-HW-3.1/r0/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.1/r0/auditLog.json --fork
+
+    mongod --replSet MyReplSet --port 31311 --dbpath ~/M310-HW-3.1/r1/ --logpath ~/M310-HW-3.1/r1/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.1/r1/auditLog.json --fork
+
+    mongod --replSet MyReplSet --port 31312 --dbpath ~/M310-HW-3.1/r2 --logpath ~/M310-HW-3.1/r2/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.1/r2/auditLog.json --fork
+
+### Homework 3.2
+
+    mongod --replSet MyReplSet --port 31320 --dbpath ~/M310-HW-3.2/r0 --logpath ~/M310-HW-3.2/r0/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.2/r0/auditLog.json --fork --auditFilter '{ "users" : {"$elemMatch" : { "user" : "steve", "db" : "admin" }}}'
+
+    mongod --replSet MyReplSet --port 31321 --dbpath ~/M310-HW-3.2/r1/ --logpath ~/M310-HW-3.2/r1/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.2/r1/auditLog.json --fork --auditFilter '{ "users" : {"$elemMatch" : { "user" : "steve", "db" : "admin" }}}'
+
+    mongod --replSet MyReplSet --port 31322 --dbpath ~/M310-HW-3.2/r2 --logpath ~/M310-HW-3.2/r2/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.2/r2/auditLog.json --fork --auditFilter '{ "users" : {"$elemMatch" : { "user" : "steve", "db" : "admin" }}}'
+
+    rs.initiate()
+    use admin
+    db.createUser({user : 'steve', pwd : 'secret', roles : ['root']})
+
+### Homework 3.3
+
+Enabling DML
+
+    mongod --replSet MyReplSet --port 31330 --dbpath ~/M310-HW-3.3/r0 --logpath ~/M310-HW-3.3/r0/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.3/r0/auditLog.json --fork --setParameter auditAuthorizationSuccess=true
+
+    mongod --replSet MyReplSet --port 31331 --dbpath ~/M310-HW-3.3/r1/ --logpath ~/M310-HW-3.3/r1/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.3/r1/auditLog.json --fork --setParameter auditAuthorizationSuccess=true
+
+    mongod --replSet MyReplSet --port 31332 --dbpath ~/M310-HW-3.3/r2 --logpath ~/M310-HW-3.3/r2/mongodb.log --auditDestination file --auditFormat JSON --auditPath ~/M310-HW-3.3/r2/auditLog.json --fork --setParameter auditAuthorizationSuccess=true
+
+### Discussion topics
+
+zoned sharding
+
+drawback multi multi
+data loss > concurrency
+link failure > alive > async > downtime 2 minutes
+HSBC dirty details
