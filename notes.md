@@ -150,6 +150,10 @@ Last modification: {{ file.mtime }}
     - [Fixing misses indexes](#fixing-misses-indexes)
   - [Connectivity issues](#connectivity-issues)
   - [Schema design](#schema-design)
+    - [Themes](#themes)
+    - [Relationships](#relationships)
+      - [Embedding vs Linking](#embedding-vs-linking)
+      - [Closing design principles](#closing-design-principles)
   - [Security Advanced](#security-advanced)
     - [Authentication](#authentication)
       - [Mechanisms](#mechanisms)
@@ -3078,10 +3082,93 @@ More documentation on sharding performance:
 
 ## Schema design
 
+From (Webinar: Schema Design, March 2015)[https://www.mongodb.com/presentations/webinar-schema-design-1]
+
 The structure of your data impacts system performance. Two typical bad performance impacts:
 
 1. Over normalization: one user interaction triggers an enormous amount of queries
 1. Under normalization: storing rarely used data with frequently accessed data
+
+MongoDB’s basic unit of storage is a document. Documents can represent rich, schema-free data structures, meaning that we have several viable alternatives to the normalized, relational model. In this talk, we’ll discuss the tradeoff of various data modeling strategies in MongoDB. You will learn:
+
+- How to work with documents
+- Evolve your schema
+- Common schema design patterns
+
+### Themes
+
+1. **Great schema design involves much more than the database**
+   1. Easily understood structures
+   1. Harmonized with software
+   1. Acknowledging legacy issues
+1. **Today's solutions need to accommodate tomorrow's needs**
+   1. End of "Requirements complete"
+   1. Ability to economically scale
+   1. Shorter solutions lifecycles
+1. **MongoDB offers you choice**
+
+| Traditional schema design          | Document schema design                |
+| ---------------------------------- | ------------------------------------- |
+| Static, uniform scalar data        | Flexible, Rich Shapes                 |
+| Rectangles                         | Objects                               |
+| Low-level, physical representation | Higher-level, business representation |
+
+### Relationships
+
+Key guiding principles:
+
+- Keeps simple things simple
+- Frees up time to tackle harder schema design issues
+
+A one-to-one relationship
+
+- belong-to relationships are often embedded
+- holistic representation of entities with their embedded attributes and relationships
+- great read performance
+
+How to manage schema evolution and different schemas:
+
+- Migrate all documents when the schema changes
+- Migrate on-demand
+  - as wel pull up a v1 document, we make the change
+  - v1's that are never pulled never get updated
+- Leave it alone
+  - the code knows about the v1 and v2 format
+
+A one-to-many relationship
+
+- Optimized for read performance on books
+- We accept data duplication
+- An index on "publisher.name" provides:
+  - efficient lookup of all books for a given publisher name
+  - efficient way to find all publisher names
+
+In situations where the data in the relationship changes frequently, keep the data inside a separate collection. Arrays can be used to duplicate documents from another collection, e.g. "latest 5 transactions" copied into the customer document. The relation is managed in the application.
+
+#### Embedding vs Linking
+
+- Embedding
+
+  - Terrific for read performance
+    - Webapp "front pages" and pre-aggregated material
+    - Complex structures
+  - Inserts might be slower than linking
+  - Data integrity needs to be managed in the application
+
+- Linking
+  - Flexible
+  - Data integrity is built-in
+  - Work is done during reads (same work as in RDBMS world)
+
+#### Closing design principles
+
+- Schema design is different in MongoDB
+  - But basic data design principles stay the same
+- Focus on how an application accesses/manipulates the data
+- Seek out and capture belongs-to 1:1 relationship
+- Use substructure to better align to code objects
+- Be polymorphic
+- Evolve the schema to meet requirements as they change
 
 ## Security Advanced
 
