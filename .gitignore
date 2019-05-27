@@ -2,3 +2,6 @@
 /prereq/**/.vagrant
 **/m-helper/data
 **/m-helper/python-env
+**/.idea
+**.iml
+**/target
