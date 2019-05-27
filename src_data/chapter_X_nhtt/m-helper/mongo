@@ -1,0 +1,8 @@
+# Starts a MongoDB shell in replica set mode
+#
+VERSION=`cat VERSION`
+PORT=`cat PORT`
+MONGODB_BIN=`m bin $VERSION`
+CMD="$MONGODB_BIN/mongo mongodb://localhost:$PORT/test?replicaSet=replset" 
+echo "$CMD"
+$CMD

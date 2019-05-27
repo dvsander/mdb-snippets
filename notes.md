@@ -1,8 +1,6 @@
 # MongoDB Technical Training notes
 
-These are notes taken during technical training and experimenting with MongoDB.
-
-Last modification: {{ file.mtime }}
+Notes and code snippets of the MongoDB platform
 
 <!-- TOC updateOnSave:false -->
 
@@ -44,7 +42,6 @@ Last modification: {{ file.mtime }}
   - [Security](#security)
     - [Introduction to security](#introduction-to-security)
     - [Adding security to a new mongod](#adding-security-to-a-new-mongod)
-    - [Terminology](#terminology)
       - [Resources](#resources)
       - [Privileges](#privileges)
       - [Role inheritance](#role-inheritance)
@@ -90,6 +87,18 @@ Last modification: {{ file.mtime }}
     - [Queries in a sharded cluster](#queries-in-a-sharded-cluster)
     - [Targeted/Routed versus scatter-gather queries](#targetedrouted-versus-scatter-gather-queries)
     - [Detecting scatter-gather queries](#detecting-scatter-gather-queries)
+  - [Advanced clustering](#advanced-clustering)
+    - [Balancer internals](#balancer-internals)
+    - [The config database](#the-config-database)
+    - [Upgrades on sharded clusters](#upgrades-on-sharded-clusters)
+    - [Mongos processes](#mongos-processes)
+    - [Chunk splitting overview](#chunk-splitting-overview)
+    - [Zone based sharding (previously tag based sharding)](#zone-based-sharding-previously-tag-based-sharding)
+    - [Hash based sharding](#hash-based-sharding)
+    - [Empty chunks](#empty-chunks)
+    - [Data imbalance scenario](#data-imbalance-scenario)
+    - [Removing a shard](#removing-a-shard)
+    - [Query the size of the data inside a chunk - (mapping metadata to physical size!)](#query-the-size-of-the-data-inside-a-chunk---mapping-metadata-to-physical-size)
   - [Indexes](#indexes)
     - [What are indexes](#what-are-indexes)
     - [Types of indexes](#types-of-indexes)
@@ -116,25 +125,6 @@ Last modification: {{ file.mtime }}
     - [Performance consideration: Reading from secondaries](#performance-consideration-reading-from-secondaries)
     - [Performance consideration: Replica sets with differing indexes](#performance-consideration-replica-sets-with-differing-indexes)
     - [Performance consideration: Aggregation pipeline on a sharded cluster](#performance-consideration-aggregation-pipeline-on-a-sharded-cluster)
-  - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
-    - [The sizing process](#the-sizing-process)
-    - [Estimating IOPS](#estimating-iops)
-    - [Estimating data size](#estimating-data-size)
-    - [Estimating the working set](#estimating-the-working-set)
-    - [Estimating the CPU](#estimating-the-cpu)
-    - [Estimating the need for sharding](#estimating-the-need-for-sharding)
-  - [Advanced clustering](#advanced-clustering)
-    - [Balancer internals](#balancer-internals)
-    - [The config database](#the-config-database)
-    - [Upgrades on sharded clusters](#upgrades-on-sharded-clusters)
-    - [Mongos processes](#mongos-processes)
-    - [Chunk splitting overview](#chunk-splitting-overview)
-    - [Zone based sharding (previously tag based sharding)](#zone-based-sharding-previously-tag-based-sharding)
-    - [Hash based sharding](#hash-based-sharding)
-    - [Empty chunks](#empty-chunks)
-    - [Data imbalance scenario](#data-imbalance-scenario)
-    - [Removing a shard](#removing-a-shard)
-    - [Query the size of the data inside a chunk - (mapping metadata to physical size!)](#query-the-size-of-the-data-inside-a-chunk---mapping-metadata-to-physical-size)
   - [Tooling overview](#tooling-overview)
     - [Server logs](#server-logs)
     - [Mongo shell](#mongo-shell)
@@ -148,7 +138,7 @@ Last modification: {{ file.mtime }}
     - [Application changes](#application-changes)
     - [Using mtools to find slow queries](#using-mtools-to-find-slow-queries)
     - [Fixing misses indexes](#fixing-misses-indexes)
-  - [Connectivity issues](#connectivity-issues)
+    - [Connectivity issues](#connectivity-issues)
   - [Schema design](#schema-design)
     - [Themes](#themes)
     - [Relationships](#relationships)
@@ -195,6 +185,20 @@ Last modification: {{ file.mtime }}
     - [Homework 3.2](#homework-32)
     - [Homework 3.3](#homework-33)
     - [Discussion topics](#discussion-topics)
+    - [Labs](#labs)
+  - [Extra: webinars](#extra-webinars)
+    - [Webinar: MongoDB Schema Design and Performance Implications](#webinar-mongodb-schema-design-and-performance-implications)
+      - [Schema design and performance](#schema-design-and-performance)
+    - [Webinar: GORUCO 2015: Bryan Reinero: Event sourcing](#webinar-goruco-2015-bryan-reinero-event-sourcing)
+    - [Webinar: Greg Young - CQRS and Event Sourcing - Code on the Beach 2014](#webinar-greg-young---cqrs-and-event-sourcing---code-on-the-beach-2014)
+  - [Extra: MongoDB World '17: Sizing MongoDB clusters](#extra-mongodb-world-17-sizing-mongodb-clusters)
+    - [The sizing process](#the-sizing-process)
+    - [Estimating IOPS](#estimating-iops)
+    - [Estimating data size](#estimating-data-size)
+    - [Estimating the working set](#estimating-the-working-set)
+    - [Estimating the CPU](#estimating-the-cpu)
+    - [Estimating the need for sharding](#estimating-the-need-for-sharding)
+    - [Transics](#transics)
 
 <!-- /TOC -->
 
@@ -589,6 +593,10 @@ User management commands:
     db.createUser()
     db.dropUser()
 
+Collection details commands:
+
+    db.getCollectionInfos() -- Returns an array of documents with collection or view information, such as name and options, for the current database. The results depend on the user’s privilege. For details, see Required Access.
+
 Collection management commands:
 
     db.collection.renameCollection()
@@ -722,8 +730,6 @@ Connecting as the newly created user:
 
     mongo --username root --password root123 --authenticationDatabase admin
 
-### Terminology
-
 A _Role_ is composed of a set of _Privileges_ which are _Actions_ that can be performed over a _Resource_
 
 #### Resources
@@ -847,6 +853,7 @@ The number of nodes need to be an odd number to allow the voting mechanism to wo
 - **Hidden** nodes can provide specific read-only workloads, copies of data hidden from your application. Must have priority set to 0
 - **Delayed** nodes: specific hidden nodes which enable hot backups thus adding resilience without having to rely on cold backup nodes
 
+[Simulating rollback on MongoDB - why PSA is not advised](https://comerford.net/2012/05/28/simulating-rollback-on-mongodb/)
 [Read more on the RAFT protocol](http://thesecretlivesofdata.com/raft/)
 
 ### Setting up a MongoDB replica set
@@ -953,6 +960,13 @@ rs.isMaster(): describes the role of the node on which this command is run
 db.serverStatus()['repl']: similar to rs.isMaster yet adds the _rbid_ field. You can use this filed to evaluate the amount of rollbacks it lags or is before another node.
 
 rs.printReplicationInfo(): returns oplog data relative to current node in _timings_. For actual oplog data, consult the oplog file itself.
+
+    replset:PRIMARY> db.printReplicationInfo()
+        configured oplog size:   192MB
+        log length start to end: 6807secs (1.89hrs)
+        oplog first event time:  Wed Oct 10 2018 09:50:01 GMT-0400 (EDT)
+        oplog last event time:   Wed Oct 10 2018 11:43:28 GMT-0400 (EDT)
+        now:                     Wed Oct 10 2018 11:43:37 GMT-0400 (EDT)
 
 rs.add: adds a new node to the replica set
 
@@ -1586,6 +1600,274 @@ The global _winningPlan.stage = SHARD_MERGE_ indicates the query had to be proce
                                 "stage" : "COLLSCAN",
                                 ...
 
+## Advanced clustering
+
+### Balancer internals
+
+Administrative commands:
+
+    sh.getBalancerState()
+    sh.stopBalancer() #disable completely - graceful completion of running activities
+    sh.startBalancer() #restart
+
+    sh.disableBalancing("database.collectionname")  #disable for collection
+    sh.enableBalancing("database.collectionname") # restart for collection
+
+    #check the settings
+    use config
+    db.collections.find().pretty()
+    db.settings.find().pretty()
+
+The thresholds apply to **the difference in number of chunks between the shard with the most chunks for the collection and the shard with the fewest chunks for that collection**. The balancer has the following thresholds: Prior to 2.2: difference of 8 chunks or more. After 2.2, total chunks:
+
+- 1-19: 2 diff
+- 20-79: 4 diff
+- 80+: 8 diff
+
+The balancer picks the chunks to move one chunk at a time and they move from the the shard with the most chunks for the collection to the shard with the fewest chunks for that collection.
+
+- It moves chunks from the shard with the highest chunk count
+- It moves the chunk with the lowest range (lowest ranged chunk on that shard)
+- It moves the chunk to the shard with the lowest chunk count
+
+Essential questions in planning a strategy for scaling out with shards:
+
+- By what factors should I measure the capacity of my system?
+- How many shards to I need to add to keep my capacity under 80%?
+- What growth trend does my application follow along my primary capacity metric?
+
+### The config database
+
+Useful commands
+
+    use config
+    sh.status
+    show collections
+
+Interesting collections
+
+| Collection         | Description                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| db.settings        | global sharded cluster settings                                                              |
+| db.mongos          | all mongos processes connected to this cluster                                               |
+| db.changelog       | a 10MB capped collection with details about the migration process (splitting, moving chunks) |
+| db.locks           | mongos specific locks on e.g. balancing                                                      |
+| **db.chunks**      | details about each chunk in the sharded collection                                           |
+| **db.databases**   |                                                                                              |
+| **db.collections** | details about the sharded collections with shardkey                                          |
+| **db.shards**      |                                                                                              |
+| **db.version**     |                                                                                              |
+
+Bold collections in the config database are checked across all servers for consistency.
+
+> Never update the config database directly. Always use helpers and do it through the mongos.
+
+### Upgrades on sharded clusters
+
+Always check the release notes, upgrade notes and upgrade instructions per version. Sometimes (most versions < 3.0 ) a specific upgrade order is required.
+
+General order:
+
+- Upgrade shards
+  - Secondaries of the shards first. Each shard being a replica set, this can be done in parallel.
+  - Upgrade primaries (step down). Don't parallelize this to minimize connection overhead.
+- Upgrade config servers
+- Upgrade mongos processes
+
+### Mongos processes
+
+A connection pool is maintained to limit the amount of 3-way handshakes needed as the TCP protocol mandates.
+
+It manages sharded cluster metadata in the config server replica set. It updates and caches this data.
+You can evict the cache with the command
+
+    db.runCommand({flushRouterConfig : 1})
+
+### Chunk splitting overview
+
+Chunks are not physical data. It is logical data grouping/partitioning. It's described by the metadata. If you split a chunk there is no change to actual data, it changes the metadata.
+
+How the splitting process works:
+
+- Mongos tracks writes to chunks
+- If it detects 20% of the max chunk size is written, it asks the primary shard for a split vector
+- The primary returns a list of split points
+- Update the metadata to reflect that split. No data has moved, no data has changed
+
+How to manually pre-split a collection:
+
+> Pre-splitting can only be done **before** you insert data
+
+When:
+
+- You have decided on a domain shard key
+- You have multiple shards up and running
+- You will be doing a bulk load and want to avoid bottlenecks during the process (balancing)
+
+Advantages:
+
+- You can decide which shard has which data range initially if you pre-split the data
+- Migration takes time, especially when the system is under load
+- Additional benefits: you can have larger chunks if you split manually
+
+How:
+
+- Calculate the avg document size
+- Calculate the rough amount of docs
+- Calculate the total data size = avg doc size \* nr of docs
+- Calculate the amount of chunks needed
+  - No! total data size / chunk size (64MB) This will fill up all chunks 100%
+  - Yes! total data size / chunk size / 2 (32MB) This will fill up all chunks 50%
+- Write a script...
+  - For each chunk you want to create, construct low
+  - Feed this in to the split command
+
+Command:
+
+    // make sure the collection exists, can be empty
+
+    // stop the balancer
+    sh.stopBalancer()
+
+    db.adminCommand({ split : "db.collectionname", middle: { id : prefix } });
+
+    // restart the balancer
+    sh.startBalancer()
+
+### Zone based sharding (previously tag based sharding)
+
+Pin collections or ranges to specific shards.
+
+Example: Spin up a sharded cluster with three shards. In a database called houses create collections named lannister, stark, and targaryen. Set up your cluster so that the collection representing each house is pinned to one of the shards.
+
+    b.createCollection("lannister")
+    db.createCollection("stark")
+    db.createCollection("targaryen")
+
+    sh.enableSharding("houses")
+    sh.shardCollection("houses.lannister", {"_id" : 1})
+    sh.shardCollection("houses.stark", {"_id" : 1})
+    sh.shardCollection("houses.targaryen", {"_id" : 1})
+
+    sh.addShardTag("m103-repl", "coll-lannister")
+    sh.addShardTag("m103-repl-2", "coll-stark")
+    sh.addShardTag("m103-repl-3", "coll-targaryen")
+
+    sh.addTagRange("houses.lannister", { _id : MinKey}, { _id : MaxKey}, "coll-lannister")
+    sh.addTagRange("houses.stark", { _id : MinKey}, { _id : MaxKey}, "coll-stark")
+    sh.addTagRange("houses.targaryen", { _id : MinKey}, { _id : MaxKey}, "coll-targaryen")
+
+Caveats
+
+- In an existing dataset a chunk can span a range. e.g. postcodes: pin 100-200, 200-300 and you have a chunk 150-220
+  - The balancer compares the lowest boundary of the chunk to the maximum of the tagged, it would go in the 100-200 shard.
+- In case of "left-over" chunks on other shards the balancer may not kick in
+  - Run the moveChunk administrative command
+  - Be sure the stop the balancer!
+
+### Hash based sharding
+
+Similar considerations to pre-splitting: High cardinality and floating point numbers discouraged
+
+    db.collection.ensureIndex({"\_id" : "hashed"})
+    sh.shardCollection("db.collection", {"\_id" : "hashed"})
+
+    # initially hashed sharding created 2 chunks on each shard. If you want to make more:
+    db.adminCommand({shardCollection : "db.collection", key : {"_id" : "hashed"}, numInitialChunks : 2048})
+
+| Pro                      | Con                                   |
+| ------------------------ | ------------------------------------- |
+| Very efficient at writes | > 1 document fetched = scatter gather |
+| Equal distribution       | MongoS can become bottleneck          |
+|                          | Only as fast as the slowest shard     |
+
+### Empty chunks
+
+How come?
+
+- Pre-splitting mistake
+- Time based shard key (monotonically increasing e.g. ObjectId) and periodically deleting data
+  - Shard 1 fills up with 500 chunks
+  - Shard 2 comes up - Balancer distributes from most chunks to lowest chunks and all lowest ranges
+  - Shard 1 contains the 250 most recent chunks - Shard 2 contains the 250 oldest chunks
+  - You decide to archive all old data
+  - Shard 2 can end up with 0 data
+
+How solve?
+
+- Pre 2.6: Stop the balancer and manually move chunks
+- After 2.6:
+  - run the mergeChunk command
+  - chunks need to be on the same shard
+  - chunks need to be a continuous range
+  - one, or both, must be empty
+
+The command, where min is the lowest boundary of the first chunk and max is the highest boundary of the second chunk to merge.
+
+    db.runCommand( { mergeChunks : "database.collection" , bounds : [ min , max ] } )
+
+### Data imbalance scenario
+
+One shard contains 6GB of data and the second shard 500MB.
+
+Why?
+
+- Poor shard key: chunk is no longer splittable
+- Pre-splitting error
+- Balancer is turned off
+- Waiting for the chunks to be split, auto-splits require traffic
+
+How solve?
+
+- Wait for the balancer to do his job
+- Turn balancer off, manual splits, wait for the balancer
+- Turn balancer off, manual splits, manual move
+
+### Removing a shard
+
+Why?
+
+- Should not be done lightly
+- Going to be slow
+
+> The balancer needs to running for the drain of the shard!
+
+How?
+
+- run the removeShard command
+- wait for all chunks to be migrated off
+- move any databases that have that shard as their primary with movePrimary command
+- run the removeShard command again
+
+### Query the size of the data inside a chunk - (mapping metadata to physical size!)
+
+Query:
+
+    mongos> first_doc = db.chunks.find().next()
+    {
+        "_id" : "myapp.users-email_MinKey",
+        "lastmod" : Timestamp(2, 0),
+        "lastmodEpoch" : ObjectId("538e27be31972172d9b3ec61"),
+        "ns" : "myapp.users",
+        "min" : {
+            "email" : { "$minKey" : 1 }
+        },
+        "max" : {
+            "email" : "aa"
+        },
+        "shard" : "test-rs1"
+    }
+    mongos> min = first_doc.min
+    { "email" : { "$minKey" : 1 } }
+    mongos> max = first_doc.max
+    { "email" : "aa" }
+    mongos> keyPattern = { email : 1 }
+    { "email" : 1 }
+    mongos> ns = first_doc.ns
+    myapp.users
+    mongos> db.runCommand({dataSize: ns, keyPattern: keyPattern, min: min, max: max } )
+    { "size" : 0, "numObjects" : 0, "millis" : 0, "ok" : 1 }
+
 ## Indexes
 
 You can learn more about indexes by visiting the [Indexes Section of the MongoDB Manual](https://docs.mongodb.com/manual/indexes). Import the people.json dataset into the m201.people collection:
@@ -2204,398 +2486,6 @@ Aggregation optimizations:
 - limit-limit is better written as limit (lowest wins)
 - match-match is better written as one match containing the 2 filters
 
-## Extra: MongoDB World '17: Sizing MongoDB clusters
-
-Typical questions to solution architects throughout the project life cycle.
-
-- Do I need to shard?
-- What size of servers should I use?
-- What will my monthly Atlas/AWS/Azure/Google costs be?
-- When will I need to add a new shard or upgrade my servers?
-- How much data can my servers support?
-- Will we able to meet our query latency requirements?
-
-> The only **accurate** way to size a cluster is to **build a prototype** and run performance tests using **actual data and queries** on hardware with **specs similar to production servers**. Anything else is a guess, an estimate, providing ballpark figures needed for decision taking, order processing and schema design.
-
-The output of an estimation will consist of:
-
-- \# of shards
-- Specifications of each server
-  - CPU
-  - Storage: size and performance (IOPS)
-  - Memory
-  - Network
-
-A working set is defined as the set of indexes + frequently processed documents. Ideally all indexes for frequently used queries exist in memory and all frequently access documents are kept in memory.
-
-### The sizing process
-
-A common methodology looks like
-
-- _Assumption list_: to be maintained at all times, preferably in a sheet with configurable parameters
-- _Collection size_: how many docs, average size, how much data, how much compression
-- _Working set_: estimate size of indexes and frequently accessed documents
-- _Queries_: map frequent queries to IOPS
-- _Adjustment_: based upon working set, checkpoints
-- _Candidate server specs_: calculate # of shards, validate # of IOPS, RAM
-- _Review, iterate, repeat_
-
-### Estimating IOPS
-
-Assume working set < RAM < Data size and memory contains indexes only (retrieving documents go to disk)
-
-| Action               | IOPS                                         |
-| -------------------- | -------------------------------------------- |
-| Retrieve a document  | 1 (retrieve)                                 |
-| Inserting a document | 1 (insert) + # of indexes                    |
-| Deleting a document  | 1 (delete) + # of indexes                    |
-| Update a document    | 2 (delete+insert new version) + # of indexes |
-
-In case an index does not exist and a COLLSCAN is needed, _all_ documents need to be read from disk resulting in a very large amount of IOPS needed.
-
-Once the basic numbers are in using this simplified model against all identified queries, we need to include unknowns and revise them:
-
-- Working set: hopefully _some_ documents will be covered in the working set and cover the entire workload of the application in memory.
-- Checkpoints: wiredtiger engine writes to RAM, then journal and flushes IO to disk in checkpoints. Writing to same documents frequently can reduce the # of IOPS due to optimization of the engine writing merged changes only once to disk
-- Document size relative to block size: very large documents (5MB) on a 4KB block size, need far more blocks read from disk to read an entire document.
-- Indexed arrays: every indexed element of the array needs to be updated when inserting/deleting/updating documents so factor these in.
-
-The IOPS calculation becomes
-
-| Line item                                            |
-| ---------------------------------------------------- |
-| + # of documents returned per second                 |
-| + # of documents updated per second                  |
-| + # of indexes impacted by each update               |
-| + # of inserts updated per second                    |
-| + # of indexes impacted by each insert               |
-| + # of deletes per second \* 2 (1 delete + 1 insert) |
-| + # of indexes impacted by each delete               |
-| - Multiple updates occurring within checkpoint       |
-| - % of find query results in cache                   |
-| **Total IOPS**                                       |
-
-### Estimating data size
-
-Very hard when application doesn't exist yet. Advise is to design one document and programmatically generate a large data set (>1M), add guessed indexes and measure the collection size, index size, compression. Extrapolate to production size.
-
-- \# of documents
-  - Input from use case, client
-- Data size
-  - Data size = # of documents \* average document size
-  - Average document size is available in db.stats(), compass, ops manager, cloud manager, atlas...
-- Index size
-- WiredTiger compression
-
-### Estimating the working set
-
-A working set is defined as the set of indexes + frequently processed documents. We know the index size from the estimation of data size.
-
-Estimating the working set given the queries is _an art_ since '_what are the frequently accessed docs_ is a rhetorical question.
-
-e.g. query analysis show
-
-- dashboards look at last minute of data
-- customer support tools inspect last hour worth of data
-- reports run once a day inspect last year worth of data
-
-The active documents would become 1 hour worth of data: 5000 x 3600 x 1KB = 18M KB
-
-### Estimating the CPU
-
-In most cases, RAM requirements -> large servers -> many cores so no specific requirements about CPU.
-
-Exception to this rule of thumb is aggregations: aggregations are split up in threads which can benefit from multi-core set-up.
-
-### Estimating the need for sharding
-
-Calculation based on input gathered in previous steps on disk space and RAM.
-
-- Disk:
-  - Data size: 9TB
-  - WT compression ratio: .33
-  - Storage size: 3TB
-  - Server disk capacity: 2TB
-  - => 2 Shards required
-- RAM:
-  - Working set: 428GB
-  - Server RAM: 128GB
-  - 428/128 = 3.34
-  - => 4 shards required
-- IOPS:
-  - 50K OPS
-  - 20K IOPS AWS
-  - 50K/20K = 2.5
-  - => 3 shards required
-
-## Advanced clustering
-
-### Balancer internals
-
-Administrative commands:
-
-    sh.getBalancerState()
-    sh.stopBalancer() #disable completely - graceful completion of running activities
-    sh.startBalancer() #restart
-
-    sh.disableBalancing("database.collectionname")  #disable for collection
-    sh.enableBalancing("database.collectionname") # restart for collection
-
-    #check the settings
-    use config
-    db.collections.find().pretty()
-    db.settings.find().pretty()
-
-The thresholds apply to **the difference in number of chunks between the shard with the most chunks for the collection and the shard with the fewest chunks for that collection**. The balancer has the following thresholds: Prior to 2.2: difference of 8 chunks or more. After 2.2, total chunks:
-
-- 1-19: 2 diff
-- 20-79: 4 diff
-- 80+: 8 diff
-
-The balancer picks the chunks to move one chunk at a time and they move from the the shard with the most chunks for the collection to the shard with the fewest chunks for that collection.
-
-- It moves chunks from the shard with the highest chunk count
-- It moves the chunk with the lowest range (lowest ranged chunk on that shard)
-- It moves the chunk to the shard with the lowest chunk count
-
-Essential questions in planning a strategy for scaling out with shards:
-
-- By what factors should I measure the capacity of my system?
-- How many shards to I need to add to keep my capacity under 80%?
-- What growth trend does my application follow along my primary capacity metric?
-
-### The config database
-
-Useful commands
-
-    use config
-    sh.status
-    show collections
-
-Interesting collections
-
-| Collection         | Description                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------------------- |
-| db.settings        | global sharded cluster settings                                                              |
-| db.mongos          | all mongos processes connected to this cluster                                               |
-| db.changelog       | a 10MB capped collection with details about the migration process (splitting, moving chunks) |
-| db.locks           | mongos specific locks on e.g. balancing                                                      |
-| **db.chunks**      | details about each chunk in the sharded collection                                           |
-| **db.databases**   |                                                                                              |
-| **db.collections** | details about the sharded collections with shardkey                                          |
-| **db.shards**      |                                                                                              |
-| **db.version**     |                                                                                              |
-
-Bold collections in the config database are checked across all servers for consistency.
-
-> Never update the config database directly. Always use helpers and do it through the mongos.
-
-### Upgrades on sharded clusters
-
-Always check the release notes, upgrade notes and upgrade instructions per version. Sometimes (most versions < 3.0 ) a specific upgrade order is required.
-
-General order:
-
-- Upgrade shards
-  - Secondaries of the shards first. Each shard being a replica set, this can be done in parallel.
-  - Upgrade primaries (step down). Don't parallelize this to minimize connection overhead.
-- Upgrade config servers
-- Upgrade mongos processes
-
-### Mongos processes
-
-A connection pool is maintained to limit the amount of 3-way handshakes needed as the TCP protocol mandates.
-
-It manages sharded cluster metadata in the config server replica set. It updates and caches this data.
-You can evict the cache with the command
-
-    db.runCommand({flushRouterConfig : 1})
-
-### Chunk splitting overview
-
-Chunks are not physical data. It is logical data grouping/partitioning. It's described by the metadata. If you split a chunk there is no change to actual data, it changes the metadata.
-
-How the splitting process works:
-
-- Mongos tracks writes to chunks
-- If it detects 20% of the max chunk size is written, it asks the primary shard for a split vector
-- The primary returns a list of split points
-- Update the metadata to reflect that split. No data has moved, no data has changed
-
-How to manually pre-split a collection:
-
-> Pre-splitting can only be done **before** you insert data
-
-When:
-
-- You have decided on a domain shard key
-- You have multiple shards up and running
-- You will be doing a bulk load and want to avoid bottlenecks during the process (balancing)
-
-Advantages:
-
-- You can decide which shard has which data range initially if you pre-split the data
-- Migration takes time, especially when the system is under load
-- Additional benefits: you can have larger chunks if you split manually
-
-How:
-
-- Calculate the avg document size
-- Calculate the rough amount of docs
-- Calculate the total data size = avg doc size \* nr of docs
-- Calculate the amount of chunks needed
-  - No! total data size / chunk size (64MB) This will fill up all chunks 100%
-  - Yes! total data size / chunk size / 2 (32MB) This will fill up all chunks 50%
-- Write a script...
-  - For each chunk you want to create, construct low
-  - Feed this in to the split command
-
-Command:
-
-    // make sure the collection exists, can be empty
-
-    // stop the balancer
-    sh.stopBalancer()
-
-    db.adminCommand({ split : "db.collectionname", middle: { id : prefix } });
-
-    // restart the balancer
-    sh.startBalancer()
-
-### Zone based sharding (previously tag based sharding)
-
-Pin collections or ranges to specific shards.
-
-Example: Spin up a sharded cluster with three shards. In a database called houses create collections named lannister, stark, and targaryen. Set up your cluster so that the collection representing each house is pinned to one of the shards.
-
-    b.createCollection("lannister")
-    db.createCollection("stark")
-    db.createCollection("targaryen")
-
-    sh.enableSharding("houses")
-    sh.shardCollection("houses.lannister", {"_id" : 1})
-    sh.shardCollection("houses.stark", {"_id" : 1})
-    sh.shardCollection("houses.targaryen", {"_id" : 1})
-
-    sh.addShardTag("m103-repl", "coll-lannister")
-    sh.addShardTag("m103-repl-2", "coll-stark")
-    sh.addShardTag("m103-repl-3", "coll-targaryen")
-
-    sh.addTagRange("houses.lannister", { _id : MinKey}, { _id : MaxKey}, "coll-lannister")
-    sh.addTagRange("houses.stark", { _id : MinKey}, { _id : MaxKey}, "coll-stark")
-    sh.addTagRange("houses.targaryen", { _id : MinKey}, { _id : MaxKey}, "coll-targaryen")
-
-Caveats
-
-- In an existing dataset a chunk can span a range. e.g. postcodes: pin 100-200, 200-300 and you have a chunk 150-220
-  - The balancer compares the lowest boundary of the chunk to the maximum of the tagged, it would go in the 100-200 shard.
-- In case of "left-over" chunks on other shards the balancer may not kick in
-  - Run the moveChunk administrative command
-  - Be sure the stop the balancer!
-
-### Hash based sharding
-
-Similar considerations to pre-splitting: High cardinality and floating point numbers discouraged
-
-    db.collection.ensureIndex({"\_id" : "hashed"})
-    sh.shardCollection("db.collection", {"\_id" : "hashed"})
-
-    # initially hashed sharding created 2 chunks on each shard. If you want to make more:
-    db.adminCommand({shardCollection : "db.collection", key : {"_id" : "hashed"}, numInitialChunks : 2048})
-
-| Pro                      | Con                                   |
-| ------------------------ | ------------------------------------- |
-| Very efficient at writes | > 1 document fetched = scatter gather |
-| Equal distribution       | MongoS can become bottleneck          |
-|                          | Only as fast as the slowest shard     |
-
-### Empty chunks
-
-How come?
-
-- Pre-splitting mistake
-- Time based shard key (monotonically increasing e.g. ObjectId) and periodically deleting data
-  - Shard 1 fills up with 500 chunks
-  - Shard 2 comes up - Balancer distributes from most chunks to lowest chunks and all lowest ranges
-  - Shard 1 contains the 250 most recent chunks - Shard 2 contains the 250 oldest chunks
-  - You decide to archive all old data
-  - Shard 2 can end up with 0 data
-
-How solve?
-
-- Pre 2.6: Stop the balancer and manually move chunks
-- After 2.6:
-  - run the mergeChunk command
-  - chunks need to be on the same shard
-  - chunks need to be a continuous range
-  - one, or both, must be empty
-
-The command, where min is the lowest boundary of the first chunk and max is the highest boundary of the second chunk to merge.
-
-    db.runCommand( { mergeChunks : "database.collection" , bounds : [ min , max ] } )
-
-### Data imbalance scenario
-
-One shard contains 6GB of data and the second shard 500MB.
-
-Why?
-
-- Poor shard key: chunk is no longer splittable
-- Pre-splitting error
-- Balancer is turned off
-- Waiting for the chunks to be split, auto-splits require traffic
-
-How solve?
-
-- Wait for the balancer to do his job
-- Turn balancer off, manual splits, wait for the balancer
-- Turn balancer off, manual splits, manual move
-
-### Removing a shard
-
-Why?
-
-- Should not be done lightly
-- Going to be slow
-
-> The balancer needs to running for the drain of the shard!
-
-How?
-
-- run the removeShard command
-- wait for all chunks to be migrated off
-- move any databases that have that shard as their primary with movePrimary command
-- run the removeShard command again
-
-### Query the size of the data inside a chunk - (mapping metadata to physical size!)
-
-Query:
-
-    mongos> first_doc = db.chunks.find().next()
-    {
-        "_id" : "myapp.users-email_MinKey",
-        "lastmod" : Timestamp(2, 0),
-        "lastmodEpoch" : ObjectId("538e27be31972172d9b3ec61"),
-        "ns" : "myapp.users",
-        "min" : {
-            "email" : { "$minKey" : 1 }
-        },
-        "max" : {
-            "email" : "aa"
-        },
-        "shard" : "test-rs1"
-    }
-    mongos> min = first_doc.min
-    { "email" : { "$minKey" : 1 } }
-    mongos> max = first_doc.max
-    { "email" : "aa" }
-    mongos> keyPattern = { email : 1 }
-    { "email" : 1 }
-    mongos> ns = first_doc.ns
-    myapp.users
-    mongos> db.runCommand({dataSize: ns, keyPattern: keyPattern, min: min, max: max } )
-    { "size" : 0, "numObjects" : 0, "millis" : 0, "ok" : 1 }
-
 ## Tooling overview
 
 Programs
@@ -2810,6 +2700,9 @@ See [mtools doc](https://github.com/rueckstiess/mtools)
 
 Useful commands
 
+    source python-env/bin/activate
+    pip install ...
+
     # `mloginfo` help
     mloginfo --help | less
 
@@ -2984,7 +2877,7 @@ Or you can go hardcore and hypothesis driven
     db.profiler_data.find({},{ns: 1, query: 1, millis: 1, ts: 1, _id: 0}).sort({millis : 1})
     db.profiler_data.find({"op" : "query", "query.filter.birthdate" : {$exists : false}}, {"query.filter" : 1, _id : 0, ts :1, millis: 1}).sort({ ts : 1})
 
-## Connectivity issues
+### Connectivity issues
 
 Make sure all nodes in a replica set have network visibility from the application driver. And make sure the firewall is allowing connections not only between the nodes but between all nodes and the application drivers.
 
@@ -4091,3 +3984,357 @@ drawback multi multi
 data loss > concurrency
 link failure > alive > async > downtime 2 minutes
 HSBC dirty details
+
+### Labs
+
+-----END RSA PRIVATE KEY-----” >> ~/AdvancedAdministrator.pem
+
+chmod 600 ~/AdvancedAdministrator.pem
+
+ssh -i ~/AdvancedAdministrator.pem -A centos@<hostname>
+
+## Extra: webinars
+
+### Webinar: MongoDB Schema Design and Performance Implications
+
+Date: 26 August 2015, [Link to webinar](https://www.mongodb.com/presentations/webinar-mongodb-schema-design-and-performance-implications)
+
+Domain: Medical Record Data
+Entities: hospitals, physicians, patients, procedures, records
+
+Difficult in relational schema:
+
+- Procedures produce different data with different types of data produced
+- Variability/agility of managing the data
+
+**Embedding**:
+
+- Advantages
+  - Retrieve all relevant info in a single query/document
+  - Avoid implementing joins in application code
+  - Update related info as a single atomic operation
+    - Transactions in MDB 4.0
+- Limitations
+  - Large documents means more overhead if most fields are not relevant
+  - 16MB document size limit
+
+**Referencing**:
+
+- Advantages
+  - Smaller documents
+  - Less likely to reach 16MB document limit
+  - Infrequently accessed information not accesses on every query
+  - No duplication of data
+- Limitations
+  - Two queries required to retrieve information
+  - ~~Cannot update related information atomically~~
+    - Transactions in MDB 4.0
+
+**One-to-one general recommendations**:
+
+- In general: embed and prove embed doesn't work
+  - No additional data duplication
+  - Can query or index on embedded field
+- Exceptional use cases
+  - Embedding results in large documents
+  - Set of infrequently accessed fields
+
+**One-to-many**:
+
+- Embedding or referencing
+  - Embedding as array
+  - Referencing on both sides! Parent array of \_id's and child key of parent_id
+- In general: embed when possible
+  - Access all information in one single query
+  - Take advantage of update atomicity
+  - No additional data duplication
+  - Can query or index on any field
+- Exceptional use cases
+  - 16MB document size
+  - Large number of infrequently accessed fields
+- Hybrid
+  - Reference the entire set and embed the last 5-10 or last month data in the parent doc
+
+**Many-to-many**:
+
+- Relational approach (join_table) is not a good idea
+- In general: use cases determined
+  - Data duplication
+    - Embedding may result in data duplication
+      - Whenever an entity is updated, it might need to update multiple documents
+    - Duplication may be okay if reads dominate updates
+    - Referencing causes no data duplication but needs multiple queries to get the data out
+  - Referencing may be required if many related items
+    - Use array of \_id's on the parent side
+  - Hybrid approach: potentially do both
+
+**Storing large files in MongoDB (>16MB)**:
+
+Every driver has an API for GridFS: given a large binary file, it will break it up into smaller chunks, save them into MongoDB along with a metadata document.
+
+#### Schema design and performance
+
+**Example 1: Hybrid approach embed and reference:**
+
+    patient.addr.state = 'NY'
+    patient.procedures = {1,2,3}
+    procedure.type = 'X-RAY CHEST'
+
+    "give me all patients in NY who have taken x-rays"
+
+In this case it would take a classical relational join to satisfy this query:
+
+    List patientsInNY = {A, B, C...}
+    List filteredPatients = procedures.patientId in patientsInNY and procedure.type = 'X-RAY CHEST'
+
+This would be very inefficient and needs an application join, if we change the model slightly:
+
+    patient.procedures = {{1, X-RAY CHEST},{2, SURGERY},{3, X-RAY CHEST}
+
+Part of the procedure data is embedded in the patient document. This query is now extremely inefficient. Downside is if the type info every changes, all patient documents need to be updated. Is the rate of change on this information justifying the tradeoff? Names of operations don't change (or very rarely).
+
+**Example 2: Time series:**
+
+Vital signs measured: Blood pressure, pulse, blood oxygen, produced every minute.
+
+Scenario 1: one document per minute per device, might look like a good idea but it's very relational.
+
+    {
+        deviceID: 1,
+        sp02: 88,
+        pulse: 74,
+        bp: [128, 80],
+        ts: ISODate("2013-10-16T22:07:00.00-0500")
+    }
+
+Scenario 2: store per-minute data at the hourly level, update driven workload
+
+    {
+        deviceID: 1,
+        sp02: { 0 : 88, 1: 90..., 59: 92}
+        pulse: {0: 74, 1: 76..., 59: 72},
+        bp: {0: [128, 80], 1: [126, 84]..., 59: [123, 83]},
+        ts: ISODate("2013-10-16T22:00:00.00-0500")
+    }
+
+|                                            | Document per event | Document per hour    |
+| ------------------------------------------ | ------------------ | -------------------- |
+| Write                                      | 60 inserts         | 1 insert, 50 updates |
+| Read 24h of data                           | 1440 reads         | 24 reads             |
+| Memory and storage differences             |                    |                      |
+| Number of docs (100K devices, 1 year data) | 52.6 GB            | 876 MB               |
+| Total index size                           | 6.364 GB           | 106 GB               |
+| \_id index                                 | 1.468 GB           | 24.5 GB              |
+| {ts: 1, deviceId : 1}                      | 4.895 GB           | 81.6 GB              |
+| Document size                              | 92 Bytes           | 758 Bytes            |
+| Database size                              | 4.503 GB           | 618MB                |
+
+### Webinar: GORUCO 2015: Bryan Reinero: Event sourcing
+
+Link: [GORUCO 2015: Bryan Reinero: Event sourcing](https://www.youtube.com/watch?v=dOlTRl8gJIs)
+Date: 3 July 2015
+
+Given: a classical transaction between two accounts
+
+    User A              User B
+    Balance:    427     Balance: 550
+                -5                +5
+
+Problem: Lost all history leading to this event. Quid attack? bug? corruption?
+
+Solution: Event sourcing in conjunction with CQRS (Command Query Responsibility Segregation).
+
+Event sourcing: forget about current state. We care but not persist it. Events that change state are logged. State can be derived from processing the eventlog. Examples are MongoDB replication of idempotent writes to the secondaries. Code Versioning Systems (Git).
+
+Problem:
+
+- Need to calculate state from first point in time.
+  - Solution: keep intermediate snapshots of calculated values
+- Need to separate readers from writers and allow asymmeterical scaling
+  - Solution: can decide on eventual consistency and target reads on secondaries while writing to primary
+
+### Webinar: Greg Young - CQRS and Event Sourcing - Code on the Beach 2014
+
+Link: [Greg Young - CQRS and Event Sourcing - Code on the Beach 2014](https://www.youtube.com/watch?v=JHGkaShoyNs)
+Date: 8 September 2014
+
+> > With Event Sourcing you must use CQRS. With CQRS you can use Event Sourcing.
+
+Problem: you need an audit log that can prove it's correct.
+
+> > State transitions are an important part of our problem space and should be modeled within our domain.
+
+Event sourcing is all about storing facts. Any code can run the events through a function in code to return a structural model. State models are derivative of facts. They are transient. Transient as in derivative, they can be deleted and recreated again. Storing events is a good loss less transactional model: append-only, immutable.
+
+Examples:
+
+- A bank account is a good example of a derivative of facts: the summations of all transactions, not an update.
+- A medical file is a derivative of facts: a patients file is a collection of measurements, facts, interviews, not an update.
+- A lawyer office managing a contract uses addendum of facts: original contract appended with new facts, not an update.
+
+Advantages:
+
+- Codebase can be different, offering different views on the facts/events
+- Change can happen without impacting other events/facts
+- Immutable Events: cannot be erased or updated
+- Time Travel, a Projection can be used to provide business with a full time-range of data: reports Q1-Q2-Q3-Q4...
+- Scalability, immutable objects copy, cache, don't care about synchronization
+- Bug fixing and user support: traceability of events leading to the error, repeatability on local system
+- Developer friendly: introduced bugs can be played back
+- Smoke testing: playing back events before launch of a new version
+- Protection against superuser attack (rogue developer or administrator with root access)
+
+> > It's business that decides on using event sourcing since it's the only model that does not lose information
+
+A Projection is a Function over a series of Events that produces some form of transient state.
+A Snapshot is a memorization of a Projection of a series of Events.
+
+Transition to CQRS: suppose I want a list of all users in the system with first name "Greg". Replay all events to collect all information...? All queries become table scans...
+
+CQS says there are two types of methods:
+
+1. A Command with void return type. Allowed to mutate state.
+1. A Query with non-void return type. Disallowed to mutate state.
+
+CQRS builds on top and calls it a pattern: only use objects of one type and that's it. Queries are most eligible to scale compared to Commands with a magnificent order of magnitude (2:1 to 1000:1 to ...).
+
+> Read intense applications (99:1) with 3rd normal form? Slow! 3rd normal form is optimized for write performance, not read performance.
+
+Most queries can operate with relaxed (eventual) consistency. Commands most certainly cannot: think of validation.
+
+Multiple Read Models can play together nicely
+
+1. UI: Document database like MongoDB
+1. OLAP
+1. Graph
+1. Stream processing
+
+> > A single model cannot be appropriate for reporting, searching and transactional behaviors.
+
+## Extra: MongoDB World '17: Sizing MongoDB clusters
+
+Link: [MongoDB World '17: Sizing MongoDB clusters](https://explore.mongodb.com/vidyard-all-players/mongodb-world-presentations-crystal-c-jay-runkel-6-21-2017)
+
+Typical questions to solution architects throughout the project life cycle.
+
+- Do I need to shard?
+- What size of servers should I use?
+- What will my monthly Atlas/AWS/Azure/Google costs be?
+- When will I need to add a new shard or upgrade my servers?
+- How much data can my servers support?
+- Will we able to meet our query latency requirements?
+
+> The only **accurate** way to size a cluster is to **build a prototype** and run performance tests using **actual data and queries** on hardware with **specs similar to production servers**. Anything else is a guess, an estimate, providing ballpark figures needed for decision taking, order processing and schema design.
+
+The output of an estimation will consist of:
+
+- \# of shards
+- Specifications of each server
+  - CPU
+  - Storage: size and performance (IOPS)
+  - Memory
+  - Network
+
+A working set is defined as the set of indexes + frequently processed documents. Ideally all indexes for frequently used queries exist in memory and all frequently access documents are kept in memory.
+
+### The sizing process
+
+A common methodology looks like
+
+- _Assumption list_: to be maintained at all times, preferably in a sheet with configurable parameters
+- _Collection size_: how many docs, average size, how much data, how much compression
+- _Working set_: estimate size of indexes and frequently accessed documents
+- _Queries_: map frequent queries to IOPS
+- _Adjustment_: based upon working set, checkpoints
+- _Candidate server specs_: calculate # of shards, validate # of IOPS, RAM
+- _Review, iterate, repeat_
+
+### Estimating IOPS
+
+Assume working set < RAM < Data size and memory contains indexes only (retrieving documents go to disk)
+
+| Action               | IOPS                                         |
+| -------------------- | -------------------------------------------- |
+| Retrieve a document  | 1 (retrieve)                                 |
+| Inserting a document | 1 (insert) + # of indexes                    |
+| Deleting a document  | 1 (delete) + # of indexes                    |
+| Update a document    | 2 (delete+insert new version) + # of indexes |
+
+In case an index does not exist and a COLLSCAN is needed, _all_ documents need to be read from disk resulting in a very large amount of IOPS needed.
+
+Once the basic numbers are in using this simplified model against all identified queries, we need to include unknowns and revise them:
+
+- Working set: hopefully _some_ documents will be covered in the working set and cover the entire workload of the application in memory.
+- Checkpoints: wiredtiger engine writes to RAM, then journal and flushes IO to disk in checkpoints. Writing to same documents frequently can reduce the # of IOPS due to optimization of the engine writing merged changes only once to disk
+- Document size relative to block size: very large documents (5MB) on a 4KB block size, need far more blocks read from disk to read an entire document.
+- Indexed arrays: every indexed element of the array needs to be updated when inserting/deleting/updating documents so factor these in.
+
+The IOPS calculation becomes
+
+| Line item                                            |
+| ---------------------------------------------------- |
+| + # of documents returned per second                 |
+| + # of documents updated per second                  |
+| + # of indexes impacted by each update               |
+| + # of inserts updated per second                    |
+| + # of indexes impacted by each insert               |
+| + # of deletes per second \* 2 (1 delete + 1 insert) |
+| + # of indexes impacted by each delete               |
+| - Multiple updates occurring within checkpoint       |
+| - % of find query results in cache                   |
+| **Total IOPS**                                       |
+
+### Estimating data size
+
+Very hard when application doesn't exist yet. Advise is to design one document and programmatically generate a large data set (>1M), add guessed indexes and measure the collection size, index size, compression. Extrapolate to production size.
+
+- \# of documents
+  - Input from use case, client
+- Data size
+  - Data size = # of documents \* average document size
+  - Average document size is available in db.stats(), compass, ops manager, cloud manager, atlas...
+- Index size
+- WiredTiger compression
+
+### Estimating the working set
+
+A working set is defined as the set of indexes + frequently processed documents. We know the index size from the estimation of data size.
+
+Estimating the working set given the queries is _an art_ since '_what are the frequently accessed docs_ is a rhetorical question.
+
+e.g. query analysis show
+
+- dashboards look at last minute of data
+- customer support tools inspect last hour worth of data
+- reports run once a day inspect last year worth of data
+
+The active documents would become 1 hour worth of data: 5000 x 3600 x 1KB = 18M KB
+
+### Estimating the CPU
+
+In most cases, RAM requirements -> large servers -> many cores so no specific requirements about CPU.
+
+Exception to this rule of thumb is aggregations: aggregations are split up in threads which can benefit from multi-core set-up.
+
+### Estimating the need for sharding
+
+Calculation based on input gathered in previous steps on disk space and RAM.
+
+- Disk:
+  - Data size: 9TB
+  - WT compression ratio: .33
+  - Storage size: 3TB
+  - Server disk capacity: 2TB
+  - => 2 Shards required
+- RAM:
+  - Working set: 428GB
+  - Server RAM: 128GB
+  - 428/128 = 3.34
+  - => 4 shards required
+- IOPS:
+  - 50K OPS
+  - 20K IOPS AWS
+  - 50K/20K = 2.5
+  - => 3 shards required
+
+### Transics

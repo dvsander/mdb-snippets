@@ -17,6 +17,7 @@ Vagrant.configure("2") do |config|
     end
     server.vm.hostname = "m103.mongodb.university"
     server.vm.network :private_network, ip: "192.168.103.100"
+    server.vm.network "forwarded_port", guest: 26000, host: 26000
     server.vm.provision :shell, path: "provision-mongod", args: ENV['ARGS']
   end
 end

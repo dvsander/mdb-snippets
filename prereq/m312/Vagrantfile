@@ -11,6 +11,25 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: 30000, host: 30000
   config.vm.network "forwarded_port", guest: 30001, host: 30001
   config.vm.network "forwarded_port", guest: 30002, host: 30002
+  config.vm.network "forwarded_port", guest: 27016, host: 27017
+  config.vm.network "forwarded_port", guest: 27017, host: 27017
+  config.vm.network "forwarded_port", guest: 27018, host: 27018
+  config.vm.network "forwarded_port", guest: 27019, host: 27019
+  config.vm.network "forwarded_port", guest: 27020, host: 27020
+  config.vm.network "forwarded_port", guest: 27021, host: 27021
+  config.vm.network "forwarded_port", guest: 27022, host: 27022
+  config.vm.network "forwarded_port", guest: 27023, host: 27023
+  config.vm.network "forwarded_port", guest: 27024, host: 27024
+  config.vm.network "forwarded_port", guest: 27025, host: 27025
+  config.vm.network "forwarded_port", guest: 27026, host: 27026
+  config.vm.network "forwarded_port", guest: 27027, host: 27027
+  config.vm.network "forwarded_port", guest: 27028, host: 27028
+  config.vm.network "forwarded_port", guest: 27029, host: 27029
+  config.vm.network "forwarded_port", guest: 27030, host: 27030
+  config.vm.network "forwarded_port", guest: 27031, host: 27031
+  config.vm.network "forwarded_port", guest: 27032, host: 27032
+  config.vm.network "forwarded_port", guest: 27033, host: 27033
+
 
   config.vm.define "m312" do |server|
     server.vm.provider "virtualbox" do |vb|

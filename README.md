@@ -1,10 +1,8 @@
 # mdb-snippets
 
-This repository contains the notes and lab files I accumulated while going through the MongoDB technical training in August 2018.
+This repository contains the notes and lab files I accumulated while going through the MongoDB technical training in Q3 2018.
 
 It covers different topics from administration, to security, performance, management tools, etc.
-
-Pull requests are welcome.
 
 Hope it serves you well,
 Sander

@@ -1,0 +1,38 @@
+if Vagrant::VERSION < "2.0.0"
+  $stderr.puts "Must redirect to new repository for old Vagrant versions"
+  Vagrant::DEFAULT_SERVER_URL.replace('https://vagrantcloud.com')
+end
+
+Vagrant.configure("2") do |config|
+  config.vm.define :dc1 do |dc1|
+    dc1.vm.box = "ubuntu/trusty64"
+    dc1.vm.network :private_network, ip: "192.168.31.100"
+    dc1.vm.network :forwarded_port, guest: 31000, host: 31000
+    dc1.vm.network :forwarded_port, guest: 31001, host: 31001
+    dc1.vm.network :forwarded_port, guest: 31002, host: 31002
+
+    dc1.vm.hostname = "dc1.mongodb.university"
+    dc1.vm.provision :shell, path: "provision-dc1", args: ENV['ARGS']
+    dc1.vm.synced_folder "shared/", "/home/vagrant/shared", create: true
+
+    dc1.vm.provider "virtualbox" do |vb|
+      vb.customize ["modifyvm", :id, "--cpus", "1", "--memory", 1024]
+    end
+  end
+
+  config.vm.define :dc2 do |dc2|
+    dc2.vm.box = "ubuntu/trusty64"
+    dc2.vm.network :private_network, ip: "192.168.31.200"
+    dc2.vm.network :forwarded_port, guest: 31003, host: 31003
+    dc2.vm.network :forwarded_port, guest: 31004, host: 31004
+
+    dc2.vm.hostname = "dc2.mongodb.university"
+    dc2.vm.provision :shell, path: "provision-dc2", args: ENV['ARGS']
+    dc2.vm.synced_folder "shared/", "/home/vagrant/shared", create: true
+
+    dc2.vm.provider "virtualbox" do |vb|
+      vb.customize ["modifyvm", :id, "--cpus", "1", "--memory", 1024]
+    end
+  end
+
+end

@@ -1,0 +1,7 @@
+# Starts a MongoDB shell, connecting to the mongos of the cluster
+#
+VERSION=`cat VERSION`
+PORT=`cat PORT`
+MONGODB_BIN=`m bin $VERSION`
+$MONGODB_BIN/mongo -port $PORT
+

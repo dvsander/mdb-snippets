@@ -118,6 +118,7 @@
 			"wtimeout",
 			"zipcode"
 		],
-		"editor.formatOnSave": true
+		"editor.formatOnSave": true,
+		"python.pythonPath": "/usr/local/bin/python3"
 	}
 }
