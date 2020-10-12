@@ -1,0 +1,18 @@
+{
+    "personal": {
+        "birthday": {
+            "$birthday": {
+                "type": "child"
+            }
+        },
+        "phone": "$phone",
+        "full name": {
+            "$name": {
+                "gender": "female"
+            }
+        },
+        "first name": "$first",
+        "last name": "$last",
+        "email": "$email"
+    }
+}

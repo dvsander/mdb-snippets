@@ -1,0 +1,2 @@
+spring.mongodb.uri=mongodb+srv://updateService:updateService@jarchitects-4fyyo.gcp.mongodb.net/acme_inc?retryWrites=true&minPoolSize=5&maxPoolSize=20&connectTimeoutMS=2000
+spring.mongodb.database=customers

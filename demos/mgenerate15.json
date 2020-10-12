@@ -1,0 +1,47 @@
+{
+    "chance": {
+        "ip_address": "$ip",
+        "unix time": "$hammertime"
+    },
+    "personal": {
+        "birthday": {
+            "$birthday": {
+                "type": "child"
+            }
+        },
+        "phone": "$phone",
+        "full name": {
+            "$name": {
+                "gender": "female"
+            }
+        },
+        "first name": "$first",
+        "last name": "$last",
+        "email": "$email",
+        "ssn": "$ssn",
+        "company": "$company",
+        "bb pin": "$bb_pin",
+        "url": {
+            "$url": {
+                "path": "images"
+            }
+        },
+        "urlfile": {
+            "$url": {
+                "extensions": ["gif", "jpg"]
+            }
+        }
+    },
+    "text": {
+        "paragraph": {
+            "$paragraph": {
+                "sentences": 1
+            }
+        },
+        "sentence": {
+            "$sentence": {
+                "words": 5
+            }
+        }
+    }
+}

@@ -1,0 +1,78 @@
+{
+    "numbers": {
+        "integer": "$integer",
+        "float": "$floating"
+    },
+    "array": {
+        "$array": {
+            "of": {
+                "$country": {
+                    "full": true
+                }
+            },
+            "number": 5
+        }
+    },
+    "geojson": {
+        "point": "$point",
+        "linestring": "$linestring",
+        "polygon": "$polygon"
+    },
+    "native types": {
+        "binary": "$binary",
+        "date": "$date",
+        "numberDecimal": {
+            "$numberDecimal": {
+                "fixed": 4
+            }
+        },
+        "numberLong": "$numberLong",
+        "timestamp": "$timestamp",
+        "regex": "$regex"
+    },
+    "chance": {
+        "ip_address": "$ip",
+        "unix time": "$hammertime"
+    },
+    "personal": {
+        "birthday": {
+            "$birthday": {
+                "type": "child"
+            }
+        },
+        "phone": "$phone",
+        "full name": {
+            "$name": {
+                "gender": "female"
+            }
+        },
+        "first name": "$first",
+        "last name": "$last",
+        "email": "$email",
+        "ssn": "$ssn",
+        "company": "$company",
+        "bb pin": "$bb_pin",
+        "url": {
+            "$url": {
+                "path": "images"
+            }
+        },
+        "urlfile": {
+            "$url": {
+                "extensions": ["gif", "jpg"]
+            }
+        }
+    },
+    "text": {
+        "paragraph": {
+            "$paragraph": {
+                "sentences": 1
+            }
+        },
+        "sentence": {
+            "$sentence": {
+                "words": 5
+            }
+        }
+    }
+}

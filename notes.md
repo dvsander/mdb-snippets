@@ -4337,4 +4337,14 @@ Calculation based on input gathered in previous steps on disk space and RAM.
   - 50K/20K = 2.5
   - => 3 shards required
 
-### Transics
+## Extra: Python Mlaunch
+
+    mkdir python
+    cd python
+    virtualenv python
+    source python/bin/activate
+
+    pip install mtools[all]
+    mlaunch --replicaset --nodes 3 --sharded 3
+
+    
